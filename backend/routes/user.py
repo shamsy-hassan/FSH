@@ -1,0 +1,77 @@
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from models.user import User
+from extensions import db
+
+user_bp = Blueprint('user', __name__)
+
+@user_bp.route('/dashboard', methods=['GET'])
+@jwt_required()
+def user_dashboard():
+    identity = get_jwt_identity()
+    if identity.get('type') != 'user':
+        return jsonify({'message': 'User access required'}), 403
+    
+    user_id = identity['id']
+    user = User.query.get(user_id)
+    
+    # Get user statistics
+    from models.order import Order
+    from models.market import MarketPost
+    from models.storage import StorageRequest
+    
+    order_count = Order.query.filter_by(user_id=user_id).count()
+    market_post_count = MarketPost.query.filter_by(user_id=user_id).count()
+    storage_request_count = StorageRequest.query.filter_by(user_id=user_id).count()
+    
+    # Get recent activity
+    recent_orders = Order.query.filter_by(user_id=user_id).order_by(Order.created_at.desc()).limit(5).all()
+    recent_posts = MarketPost.query.filter_by(user_id=user_id).order_by(MarketPost.created_at.desc()).limit(5).all()
+    
+    return jsonify({
+        'user': user.to_dict(),
+        'profile': user.profile.to_dict() if user.profile else None,
+        'stats': {
+            'orders': order_count,
+            'market_posts': market_post_count,
+            'storage_requests': storage_request_count
+        },
+        'recent_orders': [order.to_dict() for order in recent_orders],
+        'recent_posts': [post.to_dict() for post in recent_posts]
+    })
+
+@user_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    identity = get_jwt_identity()
+    if identity.get('type') != 'user':
+        return jsonify({'message': 'User access required'}), 403
+    
+    user_id = identity['id']
+    user = User.query.get(user_id)
+    
+    return jsonify({
+        'user': user.to_dict(),
+        'profile': user.profile.to_dict() if user.profile else None
+    })
+
+@user_bp.route('/change-password', methods=['PUT'])
+@jwt_required()
+def change_password():
+    identity = get_jwt_identity()
+    if identity.get('type') != 'user':
+        return jsonify({'message': 'User access required'}), 403
+    
+    user_id = identity['id']
+    user = User.query.get(user_id)
+    data = request.get_json()
+    
+    # Verify current password
+    if not user.check_password(data['current_password']):
+        return jsonify({'message': 'Current password is incorrect'}), 400
+    
+    # Set new password
+    user.set_password(data['new_password'])
+    db.session.commit()
+    
+    return jsonify({'message': 'Password changed successfully'})
