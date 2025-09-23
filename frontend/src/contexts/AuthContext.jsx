@@ -52,8 +52,20 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('agriConnectUserType', userData.type);
         } catch (error) {
           console.error('Auth initialization failed:', error);
-          // Token is invalid, clear everything
-          logout();
+          // Only logout if error is unauthorized or token expired
+          if (
+            error?.response?.status === 401 ||
+            error?.response?.status === 403 ||
+            (typeof error === 'string' && (
+              error.toLowerCase().includes('unauthorized') ||
+              error.toLowerCase().includes('token')
+            ))
+          ) {
+            logout();
+          } else {
+            // Keep user logged in, maybe show a warning
+            console.warn('Non-auth error during auth init, keeping user logged in.');
+          }
         }
       }
       setLoading(false);

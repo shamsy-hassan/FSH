@@ -49,7 +49,9 @@ def get_skill(skill_id):
 @skill_bp.route('/skills', methods=['POST'])
 @jwt_required()
 def create_skill():
-    identity = get_jwt_identity()
+    import json
+    identity_raw = get_jwt_identity()
+    identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
     if identity.get('type') != 'admin':
         return jsonify({'message': 'Admin access required'}), 403
     

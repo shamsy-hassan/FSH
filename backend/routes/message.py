@@ -1,4 +1,4 @@
-#backend/routes/message.py
+# backend/routes/message.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.message import Conversation, Message
@@ -6,12 +6,18 @@ from models.user import User
 from models.admin import Admin
 from extensions import db
 import datetime
+import json   # ✅ added
+
 message_bp = Blueprint('message', __name__)
+
 
 @message_bp.route('/conversations', methods=['GET'])
 @jwt_required()
 def get_conversations():
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     user_id = identity['id']
     user_type = identity['type']
     
@@ -29,10 +35,14 @@ def get_conversations():
         'conversations': [conv.to_dict() for conv in conversations]
     })
 
+
 @message_bp.route('/conversations', methods=['POST'])
 @jwt_required()
 def create_conversation():
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     
@@ -53,10 +63,14 @@ def create_conversation():
     
     return jsonify(conversation.to_dict())
 
+
 @message_bp.route('/conversations/<int:conversation_id>/messages', methods=['GET'])
 @jwt_required()
 def get_messages(conversation_id):
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     user_id = identity['id']
     
     conversation = Conversation.query.get_or_404(conversation_id)
@@ -71,10 +85,14 @@ def get_messages(conversation_id):
         'messages': [msg.to_dict() for msg in messages]
     })
 
+
 @message_bp.route('/conversations/<int:conversation_id>/messages', methods=['POST'])
 @jwt_required()
 def send_message(conversation_id):
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     user_id = identity['id']
     user_type = identity['type']
     
@@ -108,10 +126,14 @@ def send_message(conversation_id):
         'message_data': message.to_dict()
     }), 201
 
+
 @message_bp.route('/messages/<int:message_id>/read', methods=['PUT'])
 @jwt_required()
 def mark_message_as_read(message_id):
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     user_id = identity['id']
     
     message = Message.query.get_or_404(message_id)

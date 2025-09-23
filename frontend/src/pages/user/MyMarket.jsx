@@ -54,7 +54,11 @@ function MyMarket() {
       setLoading(true);
       const data = await agriConnectAPI.market.getPosts();
       const userId = agriConnectAPI.getUserId();
-      const userPosts = data.posts.filter(post => post.user_id === parseInt(userId));
+      const userType = agriConnectAPI.userType;
+      let userPosts = data.posts;
+      if (userType !== 'admin') {
+        userPosts = data.posts.filter(post => post.user_id === parseInt(userId));
+      }
       setMyPosts(userPosts);
       setError(null);
     } catch (err) {
@@ -69,10 +73,13 @@ function MyMarket() {
     try {
       const data = await agriConnectAPI.market.getPosts();
       const userId = agriConnectAPI.getUserId();
-      const userPosts = data.posts.filter(post => post.user_id === parseInt(userId));
+      const userType = agriConnectAPI.userType;
+      let userPosts = data.posts;
+      if (userType !== 'admin') {
+        userPosts = data.posts.filter(post => post.user_id === parseInt(userId));
+      }
       const activePosts = userPosts.filter(p => p.is_available);
       const totalEarnings = activePosts.reduce((sum, post) => sum + (parseFloat(post.price) || 0), 0);
-      
       setStats({
         totalPosts: userPosts.length,
         activePosts: activePosts.length,
@@ -173,8 +180,14 @@ function MyMarket() {
     );
   }
 
+  const userType = agriConnectAPI.userType;
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-8">
+      {userType === 'admin' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-blue-800">
+          <b>Admin Mode:</b> You are viewing all market posts. You can also create posts as admin.
+        </div>
+      )}
       {/* Header with Stats */}
       <header className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         <div className="flex justify-between items-center mb-6">

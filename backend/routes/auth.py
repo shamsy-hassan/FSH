@@ -85,8 +85,9 @@ def login():
                 return jsonify({'error': 'Account is deactivated'}), 401
             
             # Create access token for user
+            import json
             access_token = create_access_token(
-                identity={'id': user.id, 'type': 'user'},
+                identity=json.dumps({'id': user.id, 'type': 'user'}),
                 additional_claims={
                     'type': 'user',
                     'username': user.username,
@@ -111,8 +112,9 @@ def login():
                 return jsonify({'error': 'Admin account is deactivated'}), 401
             
             # Create access token for admin
+            import json
             access_token = create_access_token(
-                identity={'id': admin.id, 'type': 'admin'},
+                identity=json.dumps({'id': admin.id, 'type': 'admin'}),
                 additional_claims={
                     'type': 'admin',
                     'username': admin.username,
@@ -139,37 +141,30 @@ def login():
 @jwt_required()
 def get_profile():
     try:
-        identity = get_jwt_identity()
+        import json
+        identity = json.loads(get_jwt_identity())
         user_type = identity.get('type')
-        
         if user_type == 'user':
             user_id = identity.get('id')
             user = User.query.get(user_id)
-            
             if not user:
                 return jsonify({'error': 'User not found'}), 404
-            
             profile_data = user.to_dict()
             if user.profile:
                 profile_data['profile'] = user.profile.to_dict()
-            
             return jsonify({
                 'type': 'user',
                 'user': profile_data
             }), 200
-        
         elif user_type == 'admin':
             admin_id = identity.get('id')
             admin = Admin.query.get(admin_id)
-            
             if not admin:
                 return jsonify({'error': 'Admin not found'}), 404
-            
             return jsonify({
                 'type': 'admin',
                 'admin': admin.to_dict()
             }), 200
-        
         else:
             return jsonify({'error': 'Invalid user type'}), 401
             

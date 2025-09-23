@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Profile = () => {
   const [userData, setUserData] = useState(null);
@@ -9,7 +10,7 @@ const Profile = () => {
     last_name: '',
     phone: '',
     address: '',
-    region: '',
+    region: '', 
     farm_size: '',
     date_of_birth: '',
     gender: '',
@@ -18,6 +19,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchUserProfile();
@@ -40,6 +42,13 @@ const Profile = () => {
           gender: response.profile.gender || '',
           profile_picture: response.profile.profile_picture || null
         });
+      } else {
+        // If no profile exists, use user data
+        setProfileData(prev => ({
+          ...prev,
+          first_name: response.user.username || '',
+          last_name: ''
+        }));
       }
       
       setLoading(false);
@@ -71,7 +80,18 @@ const Profile = () => {
     setError('');
     
     try {
-      const response = await agriConnectAPI.user.updateProfile(profileData);
+      const formData = new FormData();
+      
+      // Append all profile data to formData
+      Object.keys(profileData).forEach(key => {
+        if (key === 'profile_picture' && profileData[key] instanceof File) {
+          formData.append(key, profileData[key]);
+        } else if (profileData[key] !== null && profileData[key] !== undefined) {
+          formData.append(key, profileData[key]);
+        }
+      });
+
+      const response = await agriConnectAPI.user.updateProfile(formData);
       setMessage('Profile updated successfully');
       // Refresh profile data
       await fetchUserProfile();
@@ -87,33 +107,41 @@ const Profile = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md">
+    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md mt-16">
       <h2 className="text-2xl font-bold mb-6 text-green-800">User Profile</h2>
       
       {message && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"
+        >
           {message}
-        </div>
+        </motion.div>
       )}
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"
+        >
           {error}
-        </div>
+        </motion.div>
       )}
       
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
         <h3 className="text-lg font-semibold mb-2">Account Information</h3>
-        <p><strong>Username:</strong> {userData?.username}</p>
-        <p><strong>Email:</strong> {userData?.email}</p>
-        <p><strong>User Type:</strong> {userData?.user_type}</p>
-        <p><strong>Joined:</strong> {new Date(userData?.created_at).toLocaleDateString()}</p>
+        <p><strong>Username:</strong> {userData?.username || currentUser?.username}</p>
+        <p><strong>Email:</strong> {userData?.email || currentUser?.email}</p>
+        <p><strong>User Type:</strong> {userData?.user_type || currentUser?.user_type}</p>
+        <p><strong>Joined:</strong> {userData?.created_at ? new Date(userData.created_at).toLocaleDateString() : 'N/A'}</p>
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
             <input
               type="text"
               name="first_name"
@@ -125,7 +153,7 @@ const Profile = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
             <input
               type="text"
               name="last_name"
@@ -233,13 +261,15 @@ const Profile = () => {
         </div>
         
         <div className="pt-4">
-          <button
+          <motion.button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 font-medium"
           >
             {loading ? 'Updating...' : 'Update Profile'}
-          </button>
+          </motion.button>
         </div>
       </form>
     </div>

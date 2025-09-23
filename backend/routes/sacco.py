@@ -7,6 +7,7 @@ from decimal import Decimal
 import datetime
 import random
 import string
+import json   # ✅ added
 
 sacco_bp = Blueprint('sacco', __name__)
 
@@ -30,15 +31,20 @@ def get_saccos():
         'current_page': page
     })
 
+
 @sacco_bp.route('/saccos/<int:sacco_id>', methods=['GET'])
 def get_sacco(sacco_id):
     sacco = Sacco.query.get_or_404(sacco_id)
     return jsonify(sacco.to_dict())
 
+
 @sacco_bp.route('/saccos/<int:sacco_id>/join', methods=['POST'])
 @jwt_required()
 def join_sacco(sacco_id):
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     
@@ -74,10 +80,14 @@ def join_sacco(sacco_id):
         'membership': member.to_dict()
     }), 201
 
+
 @sacco_bp.route('/membership', methods=['GET'])
 @jwt_required()
 def get_membership():
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     
@@ -87,6 +97,7 @@ def get_membership():
     return jsonify({
         'memberships': [membership.to_dict() for membership in memberships]
     })
+
 
 @sacco_bp.route('/loans', methods=['GET'])
 def get_loans():
@@ -107,10 +118,14 @@ def get_loans():
         'current_page': page
     })
 
+
 @sacco_bp.route('/loan-applications', methods=['POST'])
 @jwt_required()
 def apply_for_loan():
     identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     
@@ -142,11 +157,14 @@ def apply_for_loan():
         'application': application.to_dict()
     }), 201
 
+
 @sacco_bp.route('/loan-applications', methods=['GET'])
 @jwt_required()
 def get_loan_applications():
     identity = get_jwt_identity()
-    
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
     if identity.get('type') == 'user':
         user_id = identity['id']
         applications = LoanApplication.query.filter_by(user_id=user_id).all()
@@ -160,5 +178,6 @@ def get_loan_applications():
         return jsonify({'message': 'Invalid user type'}), 403
     
     return jsonify({
+
         'applications': [app.to_dict() for app in applications]
     })

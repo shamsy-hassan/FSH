@@ -42,22 +42,32 @@ def get_market_post(post_id):
 @market_bp.route('/posts', methods=['POST'])
 @jwt_required()
 def create_market_post():
-    identity = get_jwt_identity()
-    if identity.get('type') != 'user':
-        return jsonify({'message': 'User access required'}), 403
-    
+    import json
+    identity_raw = get_jwt_identity()
+    identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
+    if identity.get('type') not in ['user', 'admin']:
+        return jsonify({'message': 'User or admin access required'}), 403
+
     user_id = identity['id']
     data = request.form.to_dict()
-    
+
     # Handle file uploads
     images = request.files.getlist('images')
     image_urls = []
-    
+
+    import os
+    UPLOAD_FOLDER = 'static/uploads'
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
     for image in images:
         if image and allowed_file(image.filename):
-            filename = photos.save(image)
+            ext = image.filename.rsplit('.', 1)[1].lower()
+            import uuid
+            filename = f"{uuid.uuid4().hex}.{ext}"
+            path = os.path.join(UPLOAD_FOLDER, filename)
+            image.save(path)
             image_urls.append(filename)
-    
+
     # Create market post
     market_post = MarketPost(
         user_id=user_id,
@@ -70,10 +80,10 @@ def create_market_post():
         location=data.get('location', ''),
         region=data.get('region', '')
     )
-    
+
     db.session.add(market_post)
     db.session.commit()
-    
+
     # Add images
     for image_url in image_urls:
         post_image = MarketPostImage(
@@ -81,9 +91,9 @@ def create_market_post():
             image_url=image_url
         )
         db.session.add(post_image)
-    
+
     db.session.commit()
-    
+
     return jsonify({
         'message': 'Market post created successfully',
         'post': market_post.to_dict()

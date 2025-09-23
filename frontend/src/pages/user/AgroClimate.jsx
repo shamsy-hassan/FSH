@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { agriConnectAPI } from '../../services/api';
 import {
-  FiChevronDown, 
-  FiChevronUp, 
-  FiDownload, 
-  FiShare2, 
-  FiPrinter, 
-  FiMapPin, 
-  FiCalendar, 
-  FiDroplet, 
-  FiSun, 
+  FiChevronDown,
+  FiChevronUp,
+  FiDownload,
+  FiShare2,
+  FiPrinter,
+  FiMapPin,
+  FiCalendar,
+  FiDroplet,
+  FiSun,
   FiThermometer
 } from 'react-icons/fi';
 import {
@@ -24,12 +24,13 @@ import {
 } from "recharts";
 
 function AgroClimate() {
-  const [regions, setRegions] = useState([]);
+  // regions: new shape { error: boolean, data: [] }
+  const [regions, setRegions] = useState({ error: false, data: [] });
   const [selectedRegion, setSelectedRegion] = useState('');
   const [weatherData, setWeatherData] = useState(null);
   const [cropRecommendations, setCropRecommendations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true); // overall loading for initial data
+  const [error, setError] = useState(null); // business errors (recommendations, weather fetch fallbacks handled)
   const [selectedSeason, setSelectedSeason] = useState('');
   const [expandedSections, setExpandedSections] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -38,62 +39,91 @@ function AgroClimate() {
   const [weatherLoading, setWeatherLoading] = useState(false);
 
   const seasons = ['rainy', 'dry', 'spring', 'summer', 'autumn', 'winter'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
                  'July', 'August', 'September', 'October', 'November', 'December'];
 
+  // Fetch regions on mount
   useEffect(() => {
     fetchRegions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Whenever selectedRegion or season changes, fetch dependent data
   useEffect(() => {
     if (selectedRegion) {
       fetchWeatherData();
       fetchCropRecommendations();
+    } else {
+      // if no region selected, clear region-specific data
+      setWeatherData(null);
+      setCropRecommendations([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRegion, selectedSeason]);
 
+  // Build chart data when crop recommendations change
   useEffect(() => {
     if (cropRecommendations.length > 0) {
       const countBySeason = cropRecommendations.reduce((acc, rec) => {
-        acc[rec.season] = (acc[rec.season] || 0) + 1;
+        const s = rec.season || 'unspecified';
+        acc[s] = (acc[s] || 0) + 1;
         return acc;
       }, {});
       setChartData(Object.entries(countBySeason).map(([season, count]) => ({
         season,
         recommendations: count,
       })));
+    } else {
+      setChartData([]);
     }
   }, [cropRecommendations]);
 
+  // Fetch regions implementation sets the state shape: { error, data }
   const fetchRegions = async () => {
     try {
       setLoading(true);
+      setRegions(prev => ({ ...prev, error: false })); // reset error
       const data = await agriConnectAPI.agroclimate.getRegions();
-      setRegions(data.regions || []);
-      setLoading(false);
-      if (data.regions && data.regions.length > 0) {
-        setSelectedRegion(data.regions[0].id);
+      // The API might return { regions: [...] } or an array directly.
+      const regionList = data?.regions ?? data ?? [];
+      setRegions({ error: false, data: regionList });
+
+      if (regionList && regionList.length > 0) {
+        // Preserve previously selected region if it still exists; else pick first
+        const prevSelected = regionList.find(r => r.id === selectedRegion);
+        if (!prevSelected) {
+          setSelectedRegion(regionList[0].id);
+        }
+      } else {
+        // no regions found - clear selection
+        setSelectedRegion('');
       }
-    } catch (err) {
-      setError('Failed to fetch regions');
       setLoading(false);
+    } catch (err) {
       console.error('Error fetching regions:', err);
+      setRegions({ error: true, data: [] });
+      setLoading(false);
     }
   };
 
   const fetchWeatherData = async () => {
     try {
       setWeatherLoading(true);
-      const region = regions.find(r => r.id === parseInt(selectedRegion));
-      if (!region) return;
-      
+      const region = regions.data.find(r => r.id === (typeof selectedRegion === 'string' ? parseInt(selectedRegion) : selectedRegion));
+      if (!region) {
+        // no region available
+        setWeatherData(null);
+        setWeatherLoading(false);
+        return;
+      }
+
       // Real weather API call using OpenWeatherMap
       const apiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; // Replace with your actual API key
       const url = `https://api.openweathermap.org/data/2.5/weather?lat=${region.latitude}&lon=${region.longitude}&appid=${apiKey}&units=metric`;
-      
+
       const response = await fetch(url);
       if (!response.ok) throw new Error('Weather API error');
-      
+
       const data = await response.json();
       const weather = {
         temperature: Math.round(data.main.temp),
@@ -111,17 +141,17 @@ function AgroClimate() {
         last_updated: new Date().toLocaleString(),
         source: 'OpenWeatherMap'
       };
-      
+
       setWeatherData(weather);
       setError(null);
     } catch (err) {
       console.error('Weather API failed:', err);
-      // Set fallback mock data
+      // Set fallback mock data (graceful fallback)
       const fallbackWeather = {
         temperature: 25 + Math.floor(Math.random() * 10),
         feels_like: 24 + Math.floor(Math.random() * 8),
         humidity: 50 + Math.floor(Math.random() * 40),
-        rainfall: Math.random() * 5,
+        rainfall: Math.round(Math.random() * 50) / 10,
         wind_speed: 10 + Math.floor(Math.random() * 15),
         wind_direction: Math.floor(Math.random() * 360),
         weather_condition: 'Clouds',
@@ -133,9 +163,9 @@ function AgroClimate() {
         last_updated: new Date().toLocaleString(),
         source: 'Fallback Data'
       };
-      
+
       setWeatherData(fallbackWeather);
-      // Don't set error - use fallback data seamlessly
+      // don't mark global error so the app continues working with fallback
     } finally {
       setWeatherLoading(false);
     }
@@ -148,10 +178,12 @@ function AgroClimate() {
         selectedRegion,
         selectedSeason || null
       );
-      setCropRecommendations(data.recommendations || []);
+      const recs = data?.recommendations ?? data ?? [];
+      setCropRecommendations(recs);
     } catch (err) {
-      setError('Failed to fetch crop recommendations');
       console.error('Error fetching recommendations:', err);
+      setError('Failed to fetch crop recommendations');
+      setCropRecommendations([]);
     } finally {
       setLoading(false);
     }
@@ -176,7 +208,6 @@ function AgroClimate() {
   };
 
   const handlePrint = () => {
-    // In a real app, this would generate a PDF
     const content = document.getElementById('printable-content');
     if (content) {
       window.print();
@@ -186,9 +217,10 @@ function AgroClimate() {
   };
 
   const handleShare = () => {
+    const name = regions.data.find(r => r.id === (typeof selectedRegion === 'string' ? parseInt(selectedRegion) : selectedRegion))?.name ?? 'your region';
     if (navigator.share) {
       navigator.share({
-        title: `AgroClimate Advice for ${regions.find(r => r.id === parseInt(selectedRegion))?.name}`,
+        title: `AgroClimate Advice for ${name}`,
         text: 'Check out these farming recommendations for my region!',
         url: window.location.href
       });
@@ -197,18 +229,8 @@ function AgroClimate() {
     }
   };
 
-  // Loading state for regions only
-  if (loading && regions.length === 0) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
-        <span className="ml-3 text-gray-600">Loading agroclimate data...</span>
-      </div>
-    );
-  }
-
-  // No regions available
-  if (regions.length === 0) {
+  // If there was an error fetching regions, show a focused retry UI (per your snippet)
+  if (regions.error) {
     return (
       <div className="p-4 sm:p-8 max-w-7xl mx-auto text-center">
         <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
@@ -217,7 +239,7 @@ function AgroClimate() {
           </svg>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">No Regions Available</h2>
           <p className="text-gray-600 mb-4">We're having trouble loading the regions data. Please try refreshing the page.</p>
-          <button 
+          <button
             onClick={fetchRegions}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
           >
@@ -228,7 +250,8 @@ function AgroClimate() {
     );
   }
 
-  const selectedRegionData = regions.find(r => r.id === parseInt(selectedRegion));
+  // selectedRegionData - may be undefined when regions.data is empty
+  const selectedRegionData = regions.data.find(r => r.id === (typeof selectedRegion === 'string' ? parseInt(selectedRegion) : selectedRegion));
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto text-gray-800 space-y-8">
@@ -250,8 +273,30 @@ function AgroClimate() {
           <FiMapPin className="mr-2 text-green-600" />
           Select Your Farming Region
         </h2>
+
+        {/* Loading indicator for regions when data empty */}
+        {loading && regions.data.length === 0 ? (
+          <div className="flex items-center gap-3 mb-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+            <span className="text-gray-600">Loading regions...</span>
+          </div>
+        ) : null}
+
+        {/* If there are no regions but not an error, show a small notice + retry */}
+        {(!loading && regions.data.length === 0) && (
+          <div className="mb-4 p-4 rounded border border-dashed border-gray-200 bg-gray-50">
+            <p className="text-sm text-gray-600 mb-2">No regions available yet. You can retry loading or continue to other features.</p>
+            <button
+              onClick={fetchRegions}
+              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+            >
+              Retry Loading Regions
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-3 mb-6">
-          {regions.map((region) => (
+          {regions.data.map((region) => (
             <button
               key={region.id}
               onClick={() => setSelectedRegion(region.id)}
@@ -271,8 +316,8 @@ function AgroClimate() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Season
             </label>
-            <select 
-              value={selectedSeason} 
+            <select
+              value={selectedSeason}
               onChange={(e) => setSelectedSeason(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
             >
@@ -302,9 +347,9 @@ function AgroClimate() {
           </div>
 
           <div className="flex items-end">
-            <button 
+            <button
               onClick={fetchWeatherData}
-              disabled={weatherLoading}
+              disabled={weatherLoading || !selectedRegion}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
             >
               {weatherLoading ? (
@@ -315,7 +360,7 @@ function AgroClimate() {
               ) : (
                 <>
                   <FiSun className="mr-2" />
-                  Refresh Weather
+                  {selectedRegion ? 'Refresh Weather' : 'Select a Region to Fetch Weather'}
                 </>
               )}
             </button>
@@ -329,7 +374,8 @@ function AgroClimate() {
         </div>
       )}
 
-      {selectedRegion && selectedRegionData && (
+      {/* If a region is selected, show its overview; if not selected, show a gentle prompt */}
+      {selectedRegion && selectedRegionData ? (
         <>
           {/* Region Overview */}
           <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-100" id="printable-content">
@@ -340,8 +386,8 @@ function AgroClimate() {
                 </h2>
                 <p className="text-gray-600">{selectedRegionData.description || 'Region in Kenya with specific agro-climate conditions.'}</p>
               </div>
-              <div className="flex space-x-2">
-                <button 
+              <div className="flex space-x-2 relative">
+                <button
                   onClick={() => setShowPrintOptions(!showPrintOptions)}
                   className="p-2 rounded-full hover:bg-gray-100"
                   title="Export options"
@@ -349,14 +395,14 @@ function AgroClimate() {
                   <FiDownload className="text-gray-600" />
                 </button>
                 {showPrintOptions && (
-                  <div className="absolute right-8 mt-8 bg-white shadow-lg rounded-md p-2 border border-gray-200 z-10">
-                    <button 
+                  <div className="absolute right-0 mt-8 bg-white shadow-lg rounded-md p-2 border border-gray-200 z-10">
+                    <button
                       onClick={handlePrint}
                       className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <FiPrinter className="mr-2" /> Print/Save as PDF
                     </button>
-                    <button 
+                    <button
                       onClick={handleShare}
                       className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
@@ -373,7 +419,7 @@ function AgroClimate() {
                 <FiSun className="mr-2 text-yellow-500" />
                 Current Weather Conditions
               </h3>
-              
+
               {weatherLoading ? (
                 <div className="flex justify-center items-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
@@ -388,7 +434,7 @@ function AgroClimate() {
                       <p className="text-lg font-semibold capitalize">{weatherData.description}</p>
                     </div>
                   </div>
-                  
+
                   <div className="bg-orange-50 p-4 rounded-lg flex items-center">
                     <FiThermometer className="text-orange-500 text-2xl mr-3" />
                     <div>
@@ -399,7 +445,7 @@ function AgroClimate() {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="bg-green-50 p-4 rounded-lg flex items-center">
                     <FiDroplet className="text-green-500 text-2xl mr-3" />
                     <div>
@@ -407,7 +453,7 @@ function AgroClimate() {
                       <p className="text-lg font-semibold">{weatherData.humidity}%</p>
                     </div>
                   </div>
-                  
+
                   <div className="bg-purple-50 p-4 rounded-lg flex items-center">
                     <div className="text-purple-500 mr-3">
                       <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
@@ -416,16 +462,16 @@ function AgroClimate() {
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-500">Rainfall</h4>
-                      <p className="text-lg font-semibold">{weatherData.rainfall.toFixed(1)}mm</p>
+                      <p className="text-lg font-semibold">{(weatherData.rainfall ?? 0).toFixed(1)}mm</p>
                     </div>
                   </div>
-                  
+
                   <div className="md:col-span-2 lg:col-span-1 bg-yellow-50 p-4 rounded-lg">
                     <FiSun className="text-yellow-500 text-2xl mr-3 inline" />
                     <span className="text-sm font-medium text-gray-500 mr-2">Sunrise/Sunset:</span>
                     <span className="text-sm">{weatherData.sunrise} / {weatherData.sunset}</span>
                   </div>
-                  
+
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="text-gray-500 mr-3">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,7 +492,7 @@ function AgroClimate() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                   </svg>
                   <p>Weather data not available</p>
-                  <button 
+                  <button
                     onClick={fetchWeatherData}
                     className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                   >
@@ -459,8 +505,8 @@ function AgroClimate() {
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
                   <p><strong>Last Updated:</strong> {weatherData.last_updated}</p>
                   <p className="text-xs">
-                    {weatherData.source === 'OpenWeatherMap' ? 
-                      'Weather data powered by OpenWeatherMap API' : 
+                    {weatherData.source === 'OpenWeatherMap' ?
+                      'Weather data powered by OpenWeatherMap API' :
                       'Using estimated weather data based on historical patterns'
                     }
                   </p>
@@ -488,15 +534,15 @@ function AgroClimate() {
 
             {/* Expandable Recommendation Sections */}
             <div className="space-y-4">
-              <RecommendationSection 
+              <RecommendationSection
                 title="🌱 Recommended Crops & Varieties"
                 items={cropRecommendations}
                 isExpanded={expandedSections.crops}
                 toggle={() => toggleSection('crops')}
                 type="crops"
               />
-              
-              <RecommendationSection 
+
+              <RecommendationSection
                 title="📅 Planting & Harvesting Schedule"
                 items={cropRecommendations.map(rec => ({
                   planting: rec.planting_month,
@@ -521,25 +567,25 @@ function AgroClimate() {
                   <div>
                     <h4 className="font-medium text-gray-700 mb-2">Seasonal Focus</h4>
                     <p className="text-gray-700">
-                      {selectedMonth >= 2 && selectedMonth <= 4 ? 
+                      {selectedMonth >= 2 && selectedMonth <= 4 ?
                         "🌧️ Long Rains Season - Prime planting time for most crops" :
-                      selectedMonth >= 9 && selectedMonth <= 11 ?
-                        "☀️ Short Rains Season - Late planting and early harvesting" :
-                      selectedMonth >= 0 && selectedMonth <= 1 ?
-                        "🌾 Harvesting & Preparation - Post-harvest handling and land prep" :
-                        "🌱 Maintenance Season - Weeding, fertilizing, and crop care"}
+                        selectedMonth >= 9 && selectedMonth <= 11 ?
+                          "☀️ Short Rains Season - Late planting and early harvesting" :
+                          selectedMonth >= 0 && selectedMonth <= 1 ?
+                            "🌾 Harvesting & Preparation - Post-harvest handling and land prep" :
+                            "🌱 Maintenance Season - Weeding, fertilizing, and crop care"}
                     </p>
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-700 mb-2">Weather Impact</h4>
                     <p className="text-gray-700">
-                      {weatherData ? 
-                        `Current conditions (${weatherData.weather_condition.toLowerCase()}) suggest ${weatherData.temperature}°C temperatures with ${weatherData.humidity}% humidity.` : 
+                      {weatherData ?
+                        `Current conditions (${(weatherData.weather_condition || '').toLowerCase()}) suggest ${weatherData.temperature}°C temperatures with ${weatherData.humidity}% humidity.` :
                         "Monitor local weather for optimal planting decisions."}
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <h4 className="font-medium text-gray-700">Key Activities This Month:</h4>
                   <ul className="list-disc list-inside space-y-1 text-gray-700">
@@ -587,6 +633,12 @@ function AgroClimate() {
             </div>
           </section>
         </>
+      ) : (
+        // If no region selected, show a prompt but continue rendering other parts below
+        <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <h3 className="text-xl font-semibold mb-2">No Region Selected</h3>
+          <p className="text-gray-600">Select a region above to view specific weather and recommendations. You can still browse planting calendars and resources.</p>
+        </section>
       )}
 
       {/* Planting Calendar */}
@@ -602,17 +654,17 @@ function AgroClimate() {
                 const monthRecommendations = cropRecommendations.filter(
                   rec => rec.planting_month === month
                 );
-                
+
                 return (
                   <div key={month} className="bg-gray-50 rounded-lg p-3 border border-gray-200 min-w-[80px]">
                     <h4 className="font-medium text-gray-800 text-center mb-2 text-xs">
                       {month.substring(0, 3)}
                     </h4>
-                    
+
                     {monthRecommendations.length > 0 ? (
                       <div className="space-y-1">
                         {monthRecommendations.slice(0, 3).map(rec => (
-                          <div key={rec.id} className="text-xs bg-green-100 text-green-800 px-1 py-1 rounded text-center truncate">
+                          <div key={rec.id || rec.crop_name} className="text-xs bg-green-100 text-green-800 px-1 py-1 rounded text-center truncate">
                             {rec.crop_name}
                           </div>
                         ))}
@@ -690,7 +742,7 @@ function RecommendationSection({ title, items, isExpanded, toggle, type }) {
         <h3 className="text-lg font-semibold text-left">{title}</h3>
         {isExpanded ? <FiChevronUp className="text-green-600" /> : <FiChevronDown className="text-green-600" />}
       </button>
-      
+
       {isExpanded && (
         <div className="p-4 bg-white">
           {type === 'crops' ? (
@@ -721,21 +773,21 @@ function RecommendationSection({ title, items, isExpanded, toggle, type }) {
                             </span>
                           )}
                         </div>
-                        
+
                         {rec.water_requirements && (
                           <p className="mt-2 text-sm text-gray-600">
                             <FiDroplet className="inline mr-1 text-blue-500" />
                             Water: {rec.water_requirements}
                           </p>
                         )}
-                        
+
                         {rec.soil_requirements && (
                           <p className="mt-2 text-sm text-gray-600">
                             🧪 Soil: {rec.soil_requirements}
                           </p>
                         )}
                       </div>
-                      
+
                       <div className="ml-4 text-right">
                         <button className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 mb-1">
                           Save
@@ -745,7 +797,7 @@ function RecommendationSection({ title, items, isExpanded, toggle, type }) {
                         </button>
                       </div>
                     </div>
-                    
+
                     {rec.description && (
                       <p className="mt-3 text-sm text-gray-700 italic bg-gray-50 p-2 rounded">
                         {rec.description}

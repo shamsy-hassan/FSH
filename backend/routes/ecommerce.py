@@ -256,9 +256,9 @@ def clear_cart():
 @jwt_required()
 def admin_get_products():
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
-
+        import json
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
 
@@ -301,23 +301,20 @@ def admin_get_products():
 @jwt_required()
 def create_product():
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
-        
+        import json
+        identity_raw = get_jwt_identity()
+        identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
+        user_type = identity.get('type')
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
-        
         data = request.form
         file = request.files.get('image')
-        
         # Validate required fields
         required_fields = ['name', 'price', 'category_id']
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({'message': f'{field.replace("_", " ").title()} is required'}), 400
-        
         image_path = save_image(file) if file else None
-        
         product = Product(
             name=data['name'],
             description=data.get('description', ''),
@@ -330,10 +327,8 @@ def create_product():
             dimensions=data.get('dimensions', ''),
             is_active=data.get('is_active', 'true').lower() == 'true'
         )
-        
         db.session.add(product)
         db.session.commit()
-        
         return jsonify({
             'product': product.to_dict(),
             'message': 'Product created successfully'
@@ -449,30 +444,25 @@ def update_product_status(product_id):
 @jwt_required()
 def create_category():
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
-        
+        import json
+        identity_raw = get_jwt_identity()
+        identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
+        user_type = identity.get('type')
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
-        
         data = request.form
         file = request.files.get('image')
-        
         if 'name' not in data or not data['name']:
             return jsonify({'message': 'Name is required'}), 400
-        
         image_path = save_image(file) if file else None
-        
         category = Category(
             name=data['name'],
             type=data.get('type', ''),
             description=data.get('description', ''),
             image=image_path
         )
-        
         db.session.add(category)
         db.session.commit()
-        
         return jsonify({
             'category': category.to_dict(),
             'message': 'Category created successfully'

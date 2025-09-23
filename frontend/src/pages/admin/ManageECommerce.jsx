@@ -1,50 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FiShoppingCart, 
-  FiPackage, 
-  FiPlus, 
-  FiEdit, 
-  FiTrash2, 
-  FiEye, 
-  FiEyeOff, 
-  FiSearch, 
-  FiFilter,
-  FiChevronLeft,
-  FiChevronRight,
-  FiImage,
-  FiX,
-  FiUpload,
-  FiCheckCircle,
-  FiXCircle
-} from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
-import agriConnectAPI from '../../services/api';
+import React, { useState, useEffect } from "react";
+import { FiPlus, FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiCheckCircle, FiXCircle, FiPackage } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import agriConnectAPI from "../../services/api";
 
-function ManageECommerce() {
+const ManageECommerce = () => {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedTab, setSelectedTab] = useState('products');
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-
-  // Predefined category types
-  const categoryTypes = [
-    { id: 'seeds', name: 'Seeds', icon: '🌱', color: 'bg-green-100 text-green-700' },
-    { id: 'fertilizers', name: 'Fertilizers', icon: '🧪', color: 'bg-blue-100 text-blue-700' },
-    { id: 'pesticides', name: 'Pesticides', icon: '🐜', color: 'bg-red-100 text-red-700' },
-    { id: 'tools', name: 'Tools', icon: '🛠️', color: 'bg-yellow-100 text-yellow-700' },
-    { id: 'irrigation', name: 'Irrigation', icon: '💧', color: 'bg-indigo-100 text-indigo-700' },
-    { id: 'machinery', name: 'Machinery', icon: '🚜', color: 'bg-purple-100 text-purple-700' },
-    { id: 'others', name: 'Others', icon: '📦', color: 'bg-gray-100 text-gray-700' }
-  ];
 
   // Form states
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+
   const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
@@ -67,12 +40,6 @@ function ManageECommerce() {
     imagePreview: ''
   });
 
-  // Edit states
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [editingCategory, setEditingCategory] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-
-  // Check authentication and admin status
   useEffect(() => {
     if (!agriConnectAPI.isAuthenticated()) {
       navigate('/login');
@@ -85,10 +52,8 @@ function ManageECommerce() {
     }
     
     fetchCategories();
-    if (selectedTab === 'products') {
-      fetchProducts(currentPage);
-    }
-  }, [selectedTab, currentPage, searchTerm, filterStatus, navigate]);
+    fetchProducts();
+  }, [navigate]);
 
   const fetchCategories = async () => {
     try {
@@ -96,72 +61,34 @@ function ManageECommerce() {
       const data = await agriConnectAPI.ecommerce.getCategories();
       setCategories(data.categories || []);
     } catch (err) {
-      console.error('Error fetching categories:', err);
+      console.error("Error fetching categories:", err);
+      setError('Failed to fetch categories');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchProducts = async (page) => {
+  const fetchProducts = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const params = { 
-        page,
-        per_page: 10,
-        search: searchTerm
-      };
-      
-      if (filterStatus !== 'all') {
-        params.status = filterStatus;
-      }
-      
-      const data = await agriConnectAPI.ecommerce.adminGetProducts(params);
+      const data = await agriConnectAPI.ecommerce.adminGetProducts({ page: 1, per_page: 100 });
       setProducts(data.products || []);
-      setTotalPages(data.pages || 1);
     } catch (err) {
-      const errorMessage = err.message || 'Failed to fetch products';
-      setError(errorMessage);
-      console.error('Error fetching products:', err);
-      
-      if (err.message.includes('Admin access required') || err.message.includes('authentication')) {
-        navigate('/login');
-      }
+      console.error("Error fetching products:", err);
+      setError('Failed to fetch products');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImageUpload = (e, setState, isProduct = true) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Please select an image file smaller than 5MB');
-        return;
-      }
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (isProduct) {
-          setNewProduct(prev => ({
-            ...prev,
-            image: file,
-            imagePreview: reader.result
-          }));
-        } else {
-          setNewCategory(prev => ({
-            ...prev,
-            image: file,
-            imagePreview: reader.result
-          }));
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  // Filtered products based on active category
+  const filteredProducts = activeCategory === "all"
+    ? products
+    : products.filter((p) => p.category_id === parseInt(activeCategory));
 
-  const handleEditImageUpload = (e, isProduct = true) => {
+  const handleImageUpload = (e, isProduct = true) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -172,17 +99,33 @@ function ManageECommerce() {
       const reader = new FileReader();
       reader.onloadend = () => {
         if (isProduct) {
-          setEditingProduct(prev => ({
-            ...prev,
-            image: file,
-            imagePreview: reader.result
-          }));
+          if (editingProduct) {
+            setEditingProduct(prev => ({
+              ...prev,
+              image: file,
+              imagePreview: reader.result
+            }));
+          } else {
+            setNewProduct(prev => ({
+              ...prev,
+              image: file,
+              imagePreview: reader.result
+            }));
+          }
         } else {
-          setEditingCategory(prev => ({
-            ...prev,
-            image: file,
-            imagePreview: reader.result
-          }));
+          if (editingCategory) {
+            setEditingCategory(prev => ({
+              ...prev,
+              image: file,
+              imagePreview: reader.result
+            }));
+          } else {
+            setNewCategory(prev => ({
+              ...prev,
+              image: file,
+              imagePreview: reader.result
+            }));
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -199,7 +142,7 @@ function ManageECommerce() {
       Object.keys(newProduct).forEach(key => {
         if (key === 'image' && newProduct.image) {
           formData.append('image', newProduct.image);
-        } else if (newProduct[key] !== null && newProduct[key] !== undefined && newProduct[key] !== '') {
+        } else if (newProduct[key] !== null && newProduct[key] !== undefined) {
           formData.append(key, newProduct[key]);
         }
       });
@@ -210,7 +153,7 @@ function ManageECommerce() {
         name: '',
         description: '',
         price: '',
-        category_id: '',
+        category_id: activeCategory !== 'all' ? activeCategory : '',
         stock_quantity: '',
         image: null,
         imagePreview: '',
@@ -220,14 +163,13 @@ function ManageECommerce() {
         is_active: true
       });
       
-      setShowForm(false);
+      setShowProductForm(false);
       setSuccess('Product created successfully!');
-      fetchProducts(currentPage);
+      fetchProducts();
       
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to create product');
-      console.error('Error creating product:', err);
     } finally {
       setLoading(false);
     }
@@ -243,7 +185,7 @@ function ManageECommerce() {
       Object.keys(newCategory).forEach(key => {
         if (key === 'image' && newCategory.image) {
           formData.append('image', newCategory.image);
-        } else if (newCategory[key] !== null && newCategory[key] !== undefined && newCategory[key] !== '') {
+        } else if (newCategory[key] !== null && newCategory[key] !== undefined) {
           formData.append(key, newCategory[key]);
         }
       });
@@ -258,14 +200,13 @@ function ManageECommerce() {
         imagePreview: ''
       });
       
-      setShowForm(false);
+      setShowCategoryForm(false);
       setSuccess('Category created successfully!');
       fetchCategories();
       
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to create category');
-      console.error('Error creating category:', err);
     } finally {
       setLoading(false);
     }
@@ -275,18 +216,18 @@ function ManageECommerce() {
     setEditingProduct({
       ...product,
       image: null,
-      imagePreview: product.image ? `${API_BASE_URL}/static/uploads/${product.image}` : ''
+      imagePreview: product.image ? `/static/uploads/${product.image}` : ''
     });
-    setShowForm(true);
+    setShowProductForm(true);
   };
 
   const handleEditCategory = (category) => {
     setEditingCategory({
       ...category,
       image: null,
-      imagePreview: category.image ? `${API_BASE_URL}/static/uploads/${category.image}` : ''
+      imagePreview: category.image ? `/static/uploads/${category.image}` : ''
     });
-    setShowForm(true);
+    setShowCategoryForm(true);
   };
 
   const handleUpdateProduct = async (e) => {
@@ -299,7 +240,7 @@ function ManageECommerce() {
       Object.keys(editingProduct).forEach(key => {
         if (key === 'image' && editingProduct.image) {
           formData.append('image', editingProduct.image);
-        } else if (editingProduct[key] !== null && editingProduct[key] !== undefined && editingProduct[key] !== '') {
+        } else if (editingProduct[key] !== null && editingProduct[key] !== undefined) {
           formData.append(key, editingProduct[key]);
         }
       });
@@ -307,14 +248,13 @@ function ManageECommerce() {
       await agriConnectAPI.ecommerce.updateProduct(editingProduct.id, formData);
       
       setEditingProduct(null);
-      setShowForm(false);
+      setShowProductForm(false);
       setSuccess('Product updated successfully!');
-      fetchProducts(currentPage);
+      fetchProducts();
       
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to update product');
-      console.error('Error updating product:', err);
     } finally {
       setLoading(false);
     }
@@ -330,7 +270,7 @@ function ManageECommerce() {
       Object.keys(editingCategory).forEach(key => {
         if (key === 'image' && editingCategory.image) {
           formData.append('image', editingCategory.image);
-        } else if (editingCategory[key] !== null && editingCategory[key] !== undefined && editingCategory[key] !== '') {
+        } else if (editingCategory[key] !== null && editingCategory[key] !== undefined) {
           formData.append(key, editingCategory[key]);
         }
       });
@@ -338,14 +278,13 @@ function ManageECommerce() {
       await agriConnectAPI.ecommerce.updateCategory(editingCategory.id, formData);
       
       setEditingCategory(null);
-      setShowForm(false);
+      setShowCategoryForm(false);
       setSuccess('Category updated successfully!');
       fetchCategories();
       
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to update category');
-      console.error('Error updating category:', err);
     } finally {
       setLoading(false);
     }
@@ -359,12 +298,11 @@ function ManageECommerce() {
         
         await agriConnectAPI.ecommerce.deleteProduct(productId);
         setSuccess('Product deleted successfully!');
-        fetchProducts(currentPage);
+        fetchProducts();
         
         setTimeout(() => setSuccess(null), 3000);
       } catch (err) {
         setError(err.message || 'Failed to delete product');
-        console.error('Error deleting product:', err);
       } finally {
         setLoading(false);
       }
@@ -384,7 +322,6 @@ function ManageECommerce() {
         setTimeout(() => setSuccess(null), 3000);
       } catch (err) {
         setError(err.message || 'Failed to delete category');
-        console.error('Error deleting category:', err);
       } finally {
         setLoading(false);
       }
@@ -397,23 +334,14 @@ function ManageECommerce() {
       
       await agriConnectAPI.ecommerce.updateProductStatus(productId, isActive);
       setSuccess(`Product ${isActive ? 'activated' : 'deactivated'} successfully!`);
-      fetchProducts(currentPage);
+      fetchProducts();
       
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to update product status');
-      console.error('Error updating product:', err);
     }
   };
 
-  const cancelEdit = () => {
-    setEditingProduct(null);
-    setEditingCategory(null);
-    setShowForm(false);
-    setError(null);
-  };
-
-  // Format price in Kenyan Shillings
   const formatPrice = (price) => {
     return `KSh ${parseFloat(price).toLocaleString('en-KE', {
       minimumFractionDigits: 2,
@@ -421,17 +349,17 @@ function ManageECommerce() {
     })}`;
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.brand?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || product.is_active === (filterStatus === 'active');
-    return matchesSearch && matchesStatus;
-  });
+  const resetForms = () => {
+    setEditingProduct(null);
+    setEditingCategory(null);
+    setShowProductForm(false);
+    setShowCategoryForm(false);
+    setError(null);
+  };
 
-  // Show access denied if not admin
   if (!agriConnectAPI.isAdmin()) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="text-center">
           <FiXCircle className="mx-auto h-16 w-16 text-red-500 mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h2>
@@ -447,583 +375,392 @@ function ManageECommerce() {
     );
   }
 
-  if (loading && products.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center space-x-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-          <span className="text-lg font-medium text-gray-700">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="p-6 space-y-8 bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">E-Commerce Dashboard</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Manage your agricultural marketplace products and categories
+      <div>
+        <h1 className="text-2xl font-bold text-green-700">Manage E-Commerce</h1>
+        <p className="text-gray-600">Manage your agricultural marketplace products and categories</p>
+      </div>
+
+      {/* Messages */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <FiCheckCircle className="h-5 w-5 text-green-400 mr-2" />
+            <p className="text-sm text-green-800">{success}</p>
+            <button 
+              onClick={() => setSuccess(null)}
+              className="ml-auto text-green-800 hover:text-green-600"
+            >
+              <FiX className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <FiXCircle className="h-5 w-5 text-red-400 mr-2" />
+            <p className="text-sm text-red-800">{error}</p>
+            <button 
+              onClick={() => setError(null)}
+              className="ml-auto text-red-800 hover:text-red-600"
+            >
+              <FiX className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Category Buttons */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => setActiveCategory("all")}
+          className={`px-4 py-2 rounded-lg shadow transition-colors ${
+            activeCategory === "all"
+              ? "bg-green-600 text-white"
+              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+          }`}
+        >
+          All Products ({products.length})
+        </button>
+
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id.toString())}
+            className={`px-4 py-2 rounded-lg shadow transition-colors ${
+              activeCategory === cat.id.toString()
+                ? "bg-green-600 text-white"
+                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            {cat.name} ({products.filter(p => p.category_id === cat.id).length})
+          </button>
+        ))}
+
+        {/* Last button → Add Category */}
+        <button
+          onClick={() => setShowCategoryForm(true)}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition-colors"
+        >
+          <FiPlus className="inline mr-1" /> Add Category
+        </button>
+      </div>
+
+      {/* Active Category Title */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold text-gray-800">
+          {activeCategory === "all"
+            ? "All Products"
+            : `${categories.find(c => c.id.toString() === activeCategory)?.name} Products`}
+          <span className="text-green-600 ml-2">({filteredProducts.length})</span>
+        </h2>
+
+        {/* Add Product button for each category (not All) */}
+        {activeCategory !== "all" && (
+          <button
+            onClick={() => {
+              setNewProduct(prev => ({ ...prev, category_id: activeCategory }));
+              setShowProductForm(true);
+            }}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition-colors"
+          >
+            <FiPlus className="inline mr-1" /> Add Product to {categories.find(c => c.id.toString() === activeCategory)?.name}
+          </button>
+        )}
+      </div>
+
+      {/* Product List */}
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProducts.length > 0 ? (
+            filteredProducts.map((product) => (
+              <div
+                key={product.id}
+                className="bg-white border rounded-lg shadow p-4 flex flex-col hover:shadow-md transition-shadow"
+              >
+                <img
+                  src={product.image ? `/static/uploads/${product.image}` : "https://via.placeholder.com/300x200?text=No+Image"}
+                  alt={product.name}
+                  className="w-full h-48 object-cover rounded-md mb-4"
+                  onError={(e) => {
+                    e.target.src = "https://via.placeholder.com/300x200?text=No+Image";
+                  }}
+                />
+                <h3 className="text-lg font-bold text-gray-900">{product.name}</h3>
+                <p className="text-green-600 font-bold">{formatPrice(product.price)}</p>
+                <p className="text-gray-600 text-sm mt-2 line-clamp-2">{product.description}</p>
+                
+                <div className="flex items-center justify-between mt-3">
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    product.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {product.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-sm text-gray-500">Stock: {product.stock_quantity}</span>
+                </div>
+
+                <div className="flex justify-between mt-4 pt-4 border-t">
+                  <button 
+                    onClick={() => handleEditProduct(product)}
+                    className="flex items-center text-blue-600 hover:text-blue-800"
+                  >
+                    <FiEdit className="mr-1" /> Edit
+                  </button>
+                  <button 
+                    onClick={() => handleProductStatusChange(product.id, !product.is_active)}
+                    className={`flex items-center ${
+                      product.is_active ? 'text-orange-600 hover:text-orange-800' : 'text-green-600 hover:text-green-800'
+                    }`}
+                  >
+                    {product.is_active ? <FiEyeOff className="mr-1" /> : <FiEye className="mr-1" />}
+                    {product.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteProduct(product.id)}
+                    className="flex items-center text-red-600 hover:text-red-800"
+                  >
+                    <FiTrash2 className="mr-1" /> Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-12">
+              <FiPackage className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+              <p className="text-gray-500 text-lg">
+                {activeCategory === 'all' 
+                  ? "No products available." 
+                  : `No products available in ${categories.find(c => c.id.toString() === activeCategory)?.name} category.`}
               </p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-500">
-                Welcome back, Admin | 
-                <button 
-                  onClick={agriConnectAPI.auth.logout}
-                  className="ml-2 text-green-600 hover:text-green-700 font-medium"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
-      </div>
+      )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Success Message */}
-        {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <FiCheckCircle className="h-5 w-5 text-green-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-800">{success}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button 
-                  onClick={() => setSuccess(null)}
-                  className="inline-flex text-green-800 rounded-md p-1 hover:bg-green-100"
-                >
-                  <FiX className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <FiXCircle className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-800">{error}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button 
-                  onClick={() => setError(null)}
-                  className="inline-flex text-red-800 rounded-md p-1 hover:bg-red-100"
-                >
-                  <FiX className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation Tabs */}
-        <div className="mb-8">
-          <nav className="-mb-px flex space-x-8 border-b border-gray-200">
-            {[
-              { id: 'products', name: 'Products', icon: FiShoppingCart, count: products.length },
-              { id: 'categories', name: 'Categories', icon: FiPackage, count: categories.length }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setSelectedTab(tab.id);
-                  cancelEdit();
-                }}
-                className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  selectedTab === tab.id
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <tab.icon className={`mr-2 h-5 w-5 ${selectedTab === tab.id ? 'text-green-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
-                {tab.name}
-                {tab.count > 0 && (
-                  <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    selectedTab === tab.id 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
+      {/* Product Form Modal */}
+      {(showProductForm || editingProduct) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-semibold">
+                {editingProduct ? 'Edit Product' : 'Add New Product'}
+              </h3>
+              <button onClick={resetForms} className="text-gray-400 hover:text-gray-600">
+                <FiX className="h-5 w-5" />
               </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Products Management */}
-        {selectedTab === 'products' && (
-          <div className="space-y-8">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="p-3 rounded-full bg-green-100">
-                    <FiShoppingCart className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Products</p>
-                    <p className="text-2xl font-bold text-gray-900">{products.length}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="p-3 rounded-full bg-green-100">
-                    <FiEye className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Products</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {products.filter(p => p.is_active).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center">
-                  <div className="p-3 rounded-full bg-red-100">
-                    <FiEyeOff className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Inactive Products</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {products.filter(p => !p.is_active).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
-
-            {/* Controls */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => setShowForm(!showForm)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-                  >
-                    <FiPlus className="mr-2 h-4 w-4" />
-                    {showForm ? 'Cancel' : 'Add New Product'}
-                  </button>
-                  
-                  <div className="flex items-center space-x-2">
-                    <FiSearch className="h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search products..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                  </div>
+            
+            <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                  <input
+                    type="text"
+                    value={editingProduct ? editingProduct.name : newProduct.name}
+                    onChange={(e) => editingProduct 
+                      ? setEditingProduct({...editingProduct, name: e.target.value})
+                      : setNewProduct({...newProduct, name: e.target.value})
+                    }
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
                 </div>
                 
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-700">Status:</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (KSh) *</label>
+                  <input
+                    type="number"
+                    value={editingProduct ? editingProduct.price : newProduct.price}
+                    onChange={(e) => editingProduct 
+                      ? setEditingProduct({...editingProduct, price: e.target.value})
+                      : setNewProduct({...newProduct, price: e.target.value})
+                    }
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
                   <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    value={editingProduct ? editingProduct.category_id : newProduct.category_id}
+                    onChange={(e) => editingProduct 
+                      ? setEditingProduct({...editingProduct, category_id: e.target.value})
+                      : setNewProduct({...newProduct, category_id: e.target.value})
+                    }
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
-                    <option value="all">All</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="">Select Category</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Form Section */}
-            {showForm && (
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {editingProduct ? 'Edit Product' : 'Add New Product'}
-                  </h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
+                  <input
+                    type="number"
+                    value={editingProduct ? editingProduct.stock_quantity : newProduct.stock_quantity}
+                    onChange={(e) => editingProduct 
+                      ? setEditingProduct({...editingProduct, stock_quantity: e.target.value})
+                      : setNewProduct({...newProduct, stock_quantity: e.target.value})
+                    }
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
                 </div>
-                <div className="p-6">
-                  <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
-                        <input
-                          type="text"
-                          placeholder="Product Name"
-                          value={editingProduct ? editingProduct.name : newProduct.name}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, name: e.target.value})
-                            : setNewProduct({...newProduct, name: e.target.value})
-                          }
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Price (KSh) *</label>
-                        <input
-                          type="number"
-                          placeholder="Price"
-                          value={editingProduct ? editingProduct.price : newProduct.price}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, price: e.target.value})
-                            : setNewProduct({...newProduct, price: e.target.value})
-                          }
-                          required
-                          min="0"
-                          step="0.01"
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                        <select
-                          value={editingProduct ? editingProduct.category_id : newProduct.category_id}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, category_id: e.target.value})
-                            : setNewProduct({...newProduct, category_id: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                          required
-                        >
-                          <option value="">Select Category</option>
-                          {categories.map(category => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity</label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          min="0"
-                          value={editingProduct ? editingProduct.stock_quantity : newProduct.stock_quantity}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, stock_quantity: e.target.value})
-                            : setNewProduct({...newProduct, stock_quantity: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
-                        <input
-                          type="text"
-                          placeholder="Product brand"
-                          value={editingProduct ? (editingProduct.brand || '') : newProduct.brand}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, brand: e.target.value})
-                            : setNewProduct({...newProduct, brand: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-6">
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                        <textarea
-                          placeholder="Product Description"
-                          rows={4}
-                          value={editingProduct ? editingProduct.description : newProduct.description}
-                          onChange={(e) => editingProduct 
-                            ? setEditingProduct({...editingProduct, description: e.target.value})
-                            : setNewProduct({...newProduct, description: e.target.value})
-                          }
-                          className="w-full px-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
-                        <div className="flex items-center space-x-4">
-                          {(editingProduct ? editingProduct.imagePreview : newProduct.imagePreview) && (
-                            <div className="relative">
-                              <img 
-                                src={editingProduct ? editingProduct.imagePreview : newProduct.imagePreview} 
-                                alt="Preview" 
-                                className="h-40 w-40 object-cover rounded border"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => editingProduct 
-                                  ? setEditingProduct({...editingProduct, image: null, imagePreview: ''})
-                                  : setNewProduct({...newProduct, image: null, imagePreview: ''})
-                                }
-                                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"
-                              >
-                                <FiX size={16} />
-                              </button>
-                            </div>
-                          )}
-                          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                            <div className="space-y-1 text-center">
-                              <FiImage className="mx-auto h-12 w-12 text-gray-400" />
-                              <div className="flex text-sm text-gray-600">
-                                <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none">
-                                  <span>Upload an image</span>
-                                  <input 
-                                    id="file-upload" 
-                                    name="file-upload" 
-                                    type="file" 
-                                    className="sr-only" 
-                                    accept="image/*"
-                                    onChange={(e) => editingProduct 
-                                      ? handleEditImageUpload(e, true)
-                                      : handleImageUpload(e, setNewProduct, true)
-                                    }
-                                  />
-                                </label>
-                                <p className="pl-1">or drag and drop</p>
-                              </div>
-                              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-end space-x-3 pt-4">
-                        <button 
-                          type="button"
-                          onClick={cancelEdit}
-                          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button 
-                          type="submit"
-                          disabled={loading}
-                          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors disabled:opacity-50"
-                        >
-                          {loading ? 'Processing...' : (editingProduct ? 'Update Product' : 'Add Product')}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Products Display */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-xl font-bold mb-6">
-                Products
-                <span className="text-green-600"> ({filteredProducts.length})</span>
-              </h3>
-
-              {filteredProducts.length === 0 ? (
-                <div className="text-center py-10">
-                  <FiPackage className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                  <p className="text-gray-500">
-                    {products.length === 0 ? "No products found." : "No products match your search criteria."}
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Product
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Category
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Price
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Stock
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredProducts.map((product) => (
-                        <tr key={product.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {product.image && (
-                                <img
-                                  src={`${API_BASE_URL}/static/uploads/${product.image}`}
-                                  alt={product.name}
-                                  className="h-10 w-10 rounded-full object-cover mr-3"
-                                  onError={(e) => {
-                                    e.target.src = 'https://via.placeholder.com/40x40?text=No+Image';
-                                  }}
-                                />
-                              )}
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                                <div className="text-sm text-gray-500">{product.brand}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {categories.find(c => c.id === product.category_id)?.name || 'Unknown'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{formatPrice(product.price)}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{product.stock_quantity}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              product.is_active 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {product.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                            <button
-                              onClick={() => handleEditProduct(product)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <FiEdit className="inline mr-1" /> Edit
-                            </button>
-                            <button
-                              onClick={() => handleProductStatusChange(product.id, !product.is_active)}
-                              className={product.is_active ? "text-orange-600 hover:text-orange-900" : "text-green-600 hover:text-green-900"}
-                            >
-                              {product.is_active ? <FiEyeOff className="inline mr-1" /> : <FiEye className="inline mr-1" />}
-                              {product.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <FiTrash2 className="inline mr-1" /> Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between items-center">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <FiChevronLeft className="h-5 w-5" />
-                      Previous
-                    </button>
-                    <span className="text-sm text-gray-700">
-                      Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                      <FiChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Categories Management */}
-        {selectedTab === 'categories' && (
-          <div className="space-y-8">
-            {/* Categories content would go here */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold">Categories</h3>
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700"
-                >
-                  <FiPlus className="mr-2 h-4 w-4" />
-                  Add Category
-                </button>
               </div>
               
-              {categories.length === 0 ? (
-                <div className="text-center py-10">
-                  <FiPackage className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                  <p className="text-gray-500">No categories found.</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={editingProduct ? editingProduct.description : newProduct.description}
+                  onChange={(e) => editingProduct 
+                    ? setEditingProduct({...editingProduct, description: e.target.value})
+                    : setNewProduct({...newProduct, description: e.target.value})
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <div className="flex items-center space-x-4">
+                  {(editingProduct ? editingProduct.imagePreview : newProduct.imagePreview) && (
+                    <img 
+                      src={editingProduct ? editingProduct.imagePreview : newProduct.imagePreview} 
+                      alt="Preview" 
+                      className="h-20 w-20 object-cover rounded border"
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, true)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {categories.map((category) => (
-                    <div key={category.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-lg font-semibold">{category.name}</h4>
-                        <span className={`px-2 py-1 text-xs rounded-full ${categoryTypes.find(ct => ct.id === category.type)?.color || 'bg-gray-100 text-gray-800'}`}>
-                          {category.type}
-                        </span>
-                      </div>
-                      {category.description && (
-                        <p className="text-sm text-gray-600 mb-3">{category.description}</p>
-                      )}
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditCategory(category)}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          <FiEdit className="inline mr-1" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(category.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          <FiTrash2 className="inline mr-1" /> Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={resetForms}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : (editingProduct ? 'Update Product' : 'Add Product')}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Category Form Modal */}
+      {(showCategoryForm || editingCategory) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-semibold">
+                {editingCategory ? 'Edit Category' : 'Add New Category'}
+              </h3>
+              <button onClick={resetForms} className="text-gray-400 hover:text-gray-600">
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={editingCategory ? handleUpdateCategory : handleCreateCategory} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Name *</label>
+                <input
+                  type="text"
+                  value={editingCategory ? editingCategory.name : newCategory.name}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, name: e.target.value})
+                    : setNewCategory({...newCategory, name: e.target.value})
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Type *</label>
+                <select
+                  value={editingCategory ? editingCategory.type : newCategory.type}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, type: e.target.value})
+                    : setNewCategory({...newCategory, type: e.target.value})
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Select Type</option>
+                  <option value="seeds">Seeds</option>
+                  <option value="fertilizers">Fertilizers</option>
+                  <option value="pesticides">Pesticides</option>
+                  <option value="tools">Tools</option>
+                  <option value="irrigation">Irrigation</option>
+                  <option value="machinery">Machinery</option>
+                  <option value="others">Others</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={editingCategory ? editingCategory.description : newCategory.description}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, description: e.target.value})
+                    : setNewCategory({...newCategory, description: e.target.value})
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={resetForms}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : (editingCategory ? 'Update Category' : 'Add Category')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
 
 export default ManageECommerce;

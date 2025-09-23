@@ -1,9 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { agriConnectAPI } from '../../services/api';
-import { FiSearch, FiFilter, FiRefreshCw, FiEdit, FiTrash2, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiRefreshCw, FiEdit, FiTrash2, FiCheckCircle, FiXCircle, FiPlus, FiUpload, FiImage } from 'react-icons/fi';
 
 function ManageMarket() {
   const [posts, setPosts] = useState([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newPost, setNewPost] = useState({
+    title: '',
+    description: '',
+    price: '',
+    quantity: '',
+    unit: 'kg',
+    category: '',
+    location: '',
+    region: ''
+  });
+  const [images, setImages] = useState([]);
+  const units = ['kg', 'unit', 'bag', 'ton', 'liter'];
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    setImages(files);
+  };
+
+  const handleCreatePost = async (e) => {
+    e.preventDefault();
+    try {
+      await agriConnectAPI.market.createPost(newPost, images);
+      setNewPost({
+        title: '',
+        description: '',
+        price: '',
+        quantity: '',
+        unit: 'kg',
+        category: '',
+        location: '',
+        region: ''
+      });
+      setImages([]);
+      setShowCreateForm(false);
+      fetchMarketPosts();
+      fetchStats();
+      setError(null);
+    } catch (err) {
+      setError('Failed to create post');
+      console.error('Error creating post:', err);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -126,6 +168,177 @@ function ManageMarket() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-8">
+      {/* Create Post Button */}
+      <div className="flex justify-end mb-4">
+        <button 
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className={`px-4 py-2 rounded-lg font-medium flex items-center ${
+            showCreateForm 
+              ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+              : 'bg-green-600 text-white hover:bg-green-700'
+          }`}
+        >
+          {showCreateForm ? (
+            <>
+              <FiXCircle className="mr-2" size={16} />
+              Cancel
+            </>
+          ) : (
+            <>
+              <FiPlus className="mr-2" size={16} />
+              Create Post
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Create Post Form */}
+      {showCreateForm && (
+        <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-green-700 mb-6 flex items-center">
+            <FiPlus className="mr-2" />
+            Create New Market Post
+          </h2>
+          <form onSubmit={handleCreatePost} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+              <input
+                type="text"
+                placeholder="Enter post title (e.g., Fresh Maize - 100kg)"
+                value={newPost.title}
+                onChange={(e) => setNewPost({...newPost, title: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Price ($) *</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                step="0.01"
+                min="0"
+                value={newPost.price}
+                onChange={(e) => setNewPost({...newPost, price: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <textarea
+                placeholder="Describe your product in detail..."
+                value={newPost.description}
+                onChange={(e) => setNewPost({...newPost, description: e.target.value})}
+                rows={3}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity *</label>
+              <input
+                type="number"
+                placeholder="0"
+                min="0"
+                value={newPost.quantity}
+                onChange={(e) => setNewPost({...newPost, quantity: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+              <select
+                value={newPost.unit}
+                onChange={(e) => setNewPost({...newPost, unit: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                {units.map(unit => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+              <select
+                value={newPost.category}
+                onChange={(e) => setNewPost({...newPost, category: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              >
+                <option value="">Select Category</option>
+                {categories.map(category => {
+                  const style = categoryStyles[category] || { icon: '📦', color: 'gray' };
+                  return (
+                    <option key={category} value={category}>
+                      {style.icon} {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Region *</label>
+              <select
+                value={newPost.region}
+                onChange={(e) => setNewPost({...newPost, region: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              >
+                <option value="">Select Region</option>
+                {regions.map(region => (
+                  <option key={region} value={region}>{region}</option>
+                ))}
+              </select>
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
+              <input
+                type="text"
+                placeholder="Enter specific location (e.g., Nakuru Town)"
+                value={newPost.location}
+                onChange={(e) => setNewPost({...newPost, location: e.target.value})}
+                className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                required
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Product Images</label>
+              <div className="flex items-center space-x-4">
+                <label className="flex-1">
+                  <div className="flex items-center justify-center px-4 py-3 border border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <FiUpload className="mr-2 text-gray-400" size={20} />
+                    <span className="text-gray-600">Choose images</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </label>
+                {images.length > 0 && (
+                  <span className="text-sm text-green-600 flex items-center">
+                    <FiImage className="mr-1" size={16} />
+                    {images.length} image(s) selected
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Upload product images to attract more buyers (optional)</p>
+            </div>
+            <div className="lg:col-span-2 flex justify-end">
+              <button 
+                type="submit"
+                className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center transition-colors"
+              >
+                <FiPlus className="mr-2" size={18} />
+                Create Listing
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
       {/* Header with Stats */}
       <header className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         <div className="flex justify-between items-center mb-6">

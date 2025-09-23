@@ -14,7 +14,8 @@ def admin_required(fn):
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
-        identity = get_jwt_identity()
+        import json
+        identity = json.loads(get_jwt_identity())
         if identity.get('type') != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
         admin_id = identity.get('id')
@@ -121,10 +122,10 @@ def get_admins():
 @admin_bp.route('/profile', methods=['GET'])
 @admin_required
 def get_admin_profile():
-    identity = get_jwt_identity()
+    import json
+    identity = json.loads(get_jwt_identity())
     admin_id = identity.get('id')
     admin = Admin.query.get_or_404(admin_id)
-    
     return jsonify({
         'admin': admin.to_dict()
     })

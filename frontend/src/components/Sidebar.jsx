@@ -13,7 +13,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Skills', path: '/user/skills', icon: '🎓' },
     { name: 'My Store', path: '/user/my-store', icon: '🏬' },
     { name: 'Communicate', path: '/user/communicate', icon: '💬' },
-    { name: 'Profile', path: '/user/profile', icon: '👤' },
+    // { name: 'Profile', path: '/user/profile', icon: '👤' },
   ]
 
   const adminMenuItems = [

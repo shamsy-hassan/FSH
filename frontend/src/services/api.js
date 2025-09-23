@@ -101,7 +101,7 @@ class AgriConnectAPI {
         },
     };
 
-    // User API calls
+        // User API calls
     user = {
         // Get user dashboard
         getDashboard: async () => {
@@ -115,7 +115,8 @@ class AgriConnectAPI {
 
         // Get user profile
         getProfile: async () => {
-            const response = await fetch(`${API_BASE_URL}/user/profile`, {
+            // FIX: Use the correct backend endpoint
+            const response = await fetch(`${API_BASE_URL}/auth/profile`, {
                 method: 'GET',
                 headers: this.getHeaders(),
             });
@@ -626,26 +627,40 @@ class AgriConnectAPI {
         },
     };
 
-    // Agroclimate API calls
+     // Agroclimate API calls
     agroclimate = {
         // Get all regions
         getRegions: async () => {
-            const response = await fetch(`${API_BASE_URL}/agroclimate/regions`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
+            try {
+                const response = await fetch(`${API_BASE_URL}/agroclimate/regions`, {
+                    method: 'GET',
+                    headers: this.getHeaders(),
+                });
+                // If response is not ok, throw error to be caught below
+                if (!response.ok) {
+                    throw new Error('Failed to fetch regions');
+                }
+                return await response.json();
+            } catch (error) {
+                // Return empty array instead of throwing, so UI can still render
+                return [];
+            }
         },
 
         // Get specific region
         getRegion: async (regionId) => {
-            const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
+            try {
+                const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
+                    method: 'GET',
+                    headers: this.getHeaders(),
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch region');
+                }
+                return await response.json();
+            } catch (error) {
+                return null;
+            }
         },
 
         // Get weather data for a region

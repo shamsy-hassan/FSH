@@ -13,7 +13,8 @@ import {
 } from "recharts";
 
 function ManageAgroClimate() {
-  const [regions, setRegions] = useState([]);
+  // regions now shaped as { error: boolean, data: [] }
+  const [regions, setRegions] = useState({ error: false, data: [] });
   const [cropRecommendations, setCropRecommendations] = useState([]);
   const [weatherData, setWeatherData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -47,18 +48,24 @@ function ManageAgroClimate() {
 
   useEffect(() => {
     fetchRegions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (regions.length > 0) {
+    // trigger recommendations when selection or regions data changes
+    if (regions.data.length > 0) {
       fetchRecommendations();
+    } else {
+      // clear recommendations if no regions
+      setCropRecommendations([]);
     }
-  }, [selectedRegion, selectedSeason, regions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRegion, selectedSeason, regions.data]);
 
   useEffect(() => {
     if (cropRecommendations.length > 0) {
       const countByRegion = cropRecommendations.reduce((acc, rec) => {
-        const regionName = regions.find(r => r.id === rec.region_id)?.name || 'Unknown';
+        const regionName = regions.data.find(r => r.id === rec.region_id)?.name || 'Unknown';
         acc[regionName] = (acc[regionName] || 0) + 1;
         return acc;
       }, {});
@@ -66,22 +73,33 @@ function ManageAgroClimate() {
         region,
         recommendations: count,
       })));
+    } else {
+      setChartData([]);
     }
-  }, [cropRecommendations, regions]);
+  }, [cropRecommendations, regions.data]);
 
   const fetchRegions = async () => {
     try {
       setLoading(true);
+      // reset error flag
+      setRegions(prev => ({ ...prev, error: false }));
       const data = await agriConnectAPI.agroclimate.getRegions();
-      setRegions(data.regions || []);
+      const regionList = data?.regions ?? data ?? [];
+      setRegions({ error: false, data: regionList });
       setLoading(false);
-      // Set default selection for ManageAgroClimate
-      if (data.regions && data.regions.length > 0 && !selectedRegion) {
-        setSelectedRegion(data.regions[0].id.toString());
+
+      if (regionList && regionList.length > 0) {
+        // preserve selection if still exists otherwise choose first
+        const prevSelectedExists = regionList.some(r => String(r.id) === String(selectedRegion));
+        if (!prevSelectedExists) {
+          setSelectedRegion(String(regionList[0].id));
+        }
+      } else {
+        setSelectedRegion('');
       }
     } catch (err) {
       console.error('Error fetching regions:', err);
-      setError('Failed to fetch regions');
+      setRegions({ error: true, data: [] });
       setLoading(false);
     }
   };
@@ -98,7 +116,8 @@ function ManageAgroClimate() {
         );
         allRecommendations = data.recommendations || [];
       } else {
-        for (const region of regions) {
+        // batch fetch for all regions (graceful: ignore per-region errors)
+        for (const region of regions.data) {
           try {
             const data = await agriConnectAPI.agroclimate.getCropRecommendations(
               region.id,
@@ -124,7 +143,7 @@ function ManageAgroClimate() {
   const fetchWeatherData = async (regionId) => {
     try {
       setWeatherLoading(prev => ({ ...prev, [regionId]: true }));
-      const region = regions.find(r => r.id === regionId);
+      const region = regions.data.find(r => r.id === regionId);
       if (!region) return;
       
       const apiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; // Replace with your actual API key
@@ -155,13 +174,13 @@ function ManageAgroClimate() {
       setError(null);
     } catch (err) {
       console.error('Weather API failed:', err);
-      // Set fallback mock data instead of showing error
+      // graceful fallback
       const fallbackWeather = {
-        temperature: 25 + Math.floor(Math.random() * 10), // Random temp 25-35°C
+        temperature: 25 + Math.floor(Math.random() * 10),
         feels_like: 24 + Math.floor(Math.random() * 8),
-        humidity: 50 + Math.floor(Math.random() * 40), // Random humidity 50-90%
-        rainfall: Math.random() * 5, // Random rainfall 0-5mm
-        wind_speed: 10 + Math.floor(Math.random() * 15), // Random wind 10-25km/h
+        humidity: 50 + Math.floor(Math.random() * 40),
+        rainfall: Math.random() * 5,
+        wind_speed: 10 + Math.floor(Math.random() * 15),
         wind_direction: Math.floor(Math.random() * 360),
         weather_condition: ['Sunny', 'Partly Cloudy', 'Cloudy'][Math.floor(Math.random() * 3)],
         description: 'Estimated weather conditions based on historical data',
@@ -174,7 +193,7 @@ function ManageAgroClimate() {
       };
       
       setWeatherData(prev => ({ ...prev, [regionId]: fallbackWeather }));
-      // Don't set error - continue with fallback data
+      // do not set global error - use fallback
     } finally {
       setWeatherLoading(prev => ({ ...prev, [regionId]: false }));
     }
@@ -208,7 +227,6 @@ function ManageAgroClimate() {
     if (!window.confirm('Are you sure you want to delete this recommendation?')) return;
     
     try {
-      // Assume delete endpoint exists
       await agriConnectAPI.agroclimate.deleteCropRecommendation(recommendationId);
       fetchRecommendations();
       setError(null);
@@ -227,7 +245,9 @@ function ManageAgroClimate() {
   };
 
   const refreshAllWeather = async () => {
-    for (const region of regions) {
+    for (const region of regions.data) {
+      // sequential intentionally to avoid spamming API; can be parallelized if desired
+      // eslint-disable-next-line no-await-in-loop
       await fetchWeatherData(region.id);
     }
   };
@@ -248,7 +268,7 @@ function ManageAgroClimate() {
   };
 
   // Loading state for regions only
-  if (loading && regions.length === 0) {
+  if (loading && regions.data.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -257,8 +277,8 @@ function ManageAgroClimate() {
     );
   }
 
-  // No regions available
-  if (regions.length === 0) {
+  // focused retry UI when fetchRegions failed
+  if (regions.error) {
     return (
       <div className="p-4 sm:p-8 max-w-7xl mx-auto text-center">
         <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
@@ -278,7 +298,9 @@ function ManageAgroClimate() {
     );
   }
 
-  const selectedRegionData = regions.find(r => r.id === parseInt(selectedRegion));
+  // When there are no regions but no error, show a notice and continue rendering other features
+  const hasRegions = regions.data.length > 0;
+  const selectedRegionData = regions.data.find(r => String(r.id) === String(selectedRegion));
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto text-gray-800 space-y-8">
@@ -293,6 +315,19 @@ function ManageAgroClimate() {
         </p>
       </header>
 
+      {/* If no regions but not error, show small notice */}
+      {!hasRegions && (
+        <div className="mb-4 p-4 rounded border border-dashed border-gray-200 bg-gray-50">
+          <p className="text-sm text-gray-600 mb-2">No regions available yet. You can retry loading or continue to other admin tasks.</p>
+          <button
+            onClick={fetchRegions}
+            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+          >
+            Retry Loading Regions
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <section className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         <h2 className="text-2xl font-semibold mb-4 flex items-center">
@@ -306,7 +341,7 @@ function ManageAgroClimate() {
             className="px-5 py-2 rounded-full text-sm font-medium shadow-sm transition-all bg-gray-50 text-gray-700 hover:bg-green-50 hover:text-green-700 border border-gray-200"
           >
             <option value="">All Regions</option>
-            {regions.map(region => (
+            {regions.data.map(region => (
               <option key={region.id} value={region.id}>
                 {region.name}
               </option>
@@ -336,6 +371,7 @@ function ManageAgroClimate() {
           <button 
             onClick={refreshAllWeather}
             className="px-5 py-2 rounded-full text-sm font-medium shadow-sm transition-all bg-gray-50 text-gray-700 hover:bg-green-50 hover:text-green-700 border border-gray-200"
+            disabled={!hasRegions}
           >
             Refresh All Weather
           </button>
@@ -343,6 +379,7 @@ function ManageAgroClimate() {
           <button 
             onClick={() => setShowRecommendationForm(true)} 
             className="px-5 py-2 rounded-full text-sm font-medium shadow-sm transition-all bg-green-600 text-white hover:bg-green-700"
+            disabled={!hasRegions}
           >
             Add Recommendation
           </button>
@@ -431,7 +468,7 @@ function ManageAgroClimate() {
                 <FiDroplet className="text-blue-500 text-2xl mr-3" />
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Rainfall</h4>
-                  <p className="text-lg font-semibold">{weatherData[selectedRegion].rainfall.toFixed(1)}mm</p>
+                  <p className="text-lg font-semibold">{(weatherData[selectedRegion].rainfall ?? 0).toFixed(1)}mm</p>
                 </div>
               </div>
               <div className="bg-orange-50 p-4 rounded-lg flex items-center">
@@ -532,7 +569,7 @@ function ManageAgroClimate() {
                       required
                     >
                       <option value="">Select Region</option>
-                      {regions.map(region => (
+                      {regions.data.map(region => (
                         <option key={region.id} value={region.id}>{region.name}</option>
                       ))}
                     </select>
@@ -720,16 +757,17 @@ function ManageAgroClimate() {
       {/* Regions List */}
       <div className="mb-12">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-semibold text-gray-800">Regions ({regions.length})</h2>
+          <h2 className="text-2xl font-semibold text-gray-800">Regions ({regions.data.length})</h2>
           <button 
             onClick={refreshAllWeather}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center"
+            disabled={!hasRegions}
           >
             <FiSun className="mr-2" /> Refresh All Weather
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {regions.map(region => (
+          {regions.data.map(region => (
             <div key={region.id} className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -863,7 +901,7 @@ function ManageAgroClimate() {
                   )}
                 </div>
                 <div className="text-xs text-gray-500 mt-3">
-                  Region: {regions.find(r => r.id === rec.region_id)?.name || 'Unknown'}
+                  Region: {regions.data.find(r => r.id === rec.region_id)?.name || 'Unknown'}
                 </div>
               </div>
             ))}

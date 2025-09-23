@@ -165,14 +165,13 @@ function ECommerce() {
     }
   };
 
-  const addToCart = async (productId, quantity = 1) => {
+  const addToCart = async (product, quantity = 1) => {
     try {
       if (!agriConnectAPI.isAuthenticated()) {
         setError('Please login to add items to cart');
         return;
       }
-      
-      await agriConnectAPI.ecommerce.addToCart(productId, quantity);
+      await agriConnectAPI.ecommerce.addToCart(product.id, quantity);
       await fetchCart();
       setCartVisible(true);
       setOrderMessage(`${product.name} added to cart!`);
@@ -769,7 +768,7 @@ function ProductCard({ product, addToCart }) {
             )}
           </div>
           <button
-            onClick={() => addToCart(product.id)}
+            onClick={() => addToCart(product)}
             className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition flex items-center"
             disabled={product.stock_quantity <= 0}
           >
