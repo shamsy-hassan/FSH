@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.skill import SkillCategory, Skill, SkillVideo
 from extensions import db
+import json
 
 skill_bp = Blueprint('skill', __name__)
 
@@ -49,10 +50,8 @@ def get_skill(skill_id):
 @skill_bp.route('/skills', methods=['POST'])
 @jwt_required()
 def create_skill():
-    import json
-    identity_raw = get_jwt_identity()
-    identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
-    if identity.get('type') != 'admin':
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
         return jsonify({'message': 'Admin access required'}), 403
     
     data = request.get_json()
@@ -68,8 +67,8 @@ def create_skill():
 @skill_bp.route('/videos', methods=['POST'])
 @jwt_required()
 def add_skill_video():
-    identity = get_jwt_identity()
-    if identity.get('type') != 'admin':
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
         return jsonify({'message': 'Admin access required'}), 403
     
     data = request.get_json()

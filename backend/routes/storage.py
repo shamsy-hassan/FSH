@@ -36,6 +36,87 @@ def get_warehouse(warehouse_id):
     return jsonify(warehouse.to_dict())
 
 
+@storage_bp.route('/warehouses', methods=['POST'])
+@jwt_required()
+def create_warehouse():
+    identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
+    if identity.get('type') != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    data = request.get_json()
+    
+    try:
+        # Create new warehouse
+        warehouse = Warehouse(
+            name=data['name'],
+            location=data['location'],
+            region=data['region'],
+            capacity=float(data['capacity']),
+            available_capacity=float(data.get('available_capacity', data['capacity'])),
+            temperature_control=bool(data.get('temperature_control', False)),
+            humidity_control=bool(data.get('humidity_control', False)),
+            security_level=data.get('security_level', 'standard'),
+            owner=data.get('owner', ''),
+            contact_info=data.get('contact_info', ''),
+            rates=data.get('rates', '{}')
+        )
+        
+        db.session.add(warehouse)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Warehouse created successfully',
+            'warehouse': warehouse.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error creating warehouse: {str(e)}'}), 400
+
+
+@storage_bp.route('/warehouses/<int:warehouse_id>', methods=['PUT'])
+@jwt_required()
+def update_warehouse(warehouse_id):
+    identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
+    if identity.get('type') != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    warehouse = Warehouse.query.get_or_404(warehouse_id)
+    data = request.get_json()
+    
+    try:
+        # Update warehouse fields
+        warehouse.name = data.get('name', warehouse.name)
+        warehouse.location = data.get('location', warehouse.location)
+        warehouse.region = data.get('region', warehouse.region)
+        warehouse.capacity = float(data.get('capacity', warehouse.capacity))
+        warehouse.available_capacity = float(data.get('available_capacity', warehouse.available_capacity))
+        warehouse.temperature_control = bool(data.get('temperature_control', warehouse.temperature_control))
+        warehouse.humidity_control = bool(data.get('humidity_control', warehouse.humidity_control))
+        warehouse.security_level = data.get('security_level', warehouse.security_level)
+        warehouse.owner = data.get('owner', warehouse.owner)
+        warehouse.contact_info = data.get('contact_info', warehouse.contact_info)
+        warehouse.rates = data.get('rates', warehouse.rates)
+        warehouse.is_active = bool(data.get('is_active', warehouse.is_active))
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Warehouse updated successfully',
+            'warehouse': warehouse.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error updating warehouse: {str(e)}'}), 400
+
+
 @storage_bp.route('/storage-requests', methods=['POST'])
 @jwt_required()
 def create_storage_request():

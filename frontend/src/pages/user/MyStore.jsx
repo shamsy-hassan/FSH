@@ -2,6 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { agriConnectAPI } from '../../services/api';
 
+// Safe JSON parsing function
+const safeJsonParse = (str, defaultValue = {}) => {
+  if (!str) return defaultValue;
+  try {
+    return JSON.parse(str);
+  } catch (error) {
+    console.error('JSON parse error:', error, 'String:', str);
+    return defaultValue;
+  }
+};
+
 export default function MyStore({ farmerId }) {
   const [warehouses, setWarehouses] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
@@ -41,7 +52,7 @@ export default function MyStore({ farmerId }) {
     maximum: { color: 'red', icon: '🚨' }
   };
 
-  // Fallback sample data
+  // Fixed fallback sample data with proper JSON strings
   const fallbackWarehouses = [
     {
       id: 1,
@@ -54,7 +65,7 @@ export default function MyStore({ farmerId }) {
       temperature_control: true,
       humidity_control: true,
       description: "Modern climate-controlled facility with 24/7 security and advanced monitoring systems.",
-      rates: JSON.stringify({ grains: 12, fruits: 18, vegetables: 15 }),
+      rates: '{"grains": 12, "fruits": 18, "vegetables": 15}',
       is_active: true
     },
     {
@@ -68,7 +79,7 @@ export default function MyStore({ farmerId }) {
       temperature_control: true,
       humidity_control: false,
       description: "Specialized fruit storage with temperature regulation and pest control measures.",
-      rates: JSON.stringify({ grains: 10, fruits: 16, vegetables: 13 }),
+      rates: '{"grains": 10, "fruits": 16, "vegetables": 13}',
       is_active: true
     },
     {
@@ -82,7 +93,7 @@ export default function MyStore({ farmerId }) {
       temperature_control: false,
       humidity_control: false,
       description: "Large-scale grain silo with maximum security and bulk handling capabilities.",
-      rates: JSON.stringify({ grains: 8, fruits: 20, vegetables: 12 }),
+      rates: '{"grains": 8, "fruits": 20, "vegetables": 12}',
       is_active: true
     },
     {
@@ -96,7 +107,7 @@ export default function MyStore({ farmerId }) {
       temperature_control: true,
       humidity_control: true,
       description: "Fresh produce storage with humidity control and rapid loading facilities.",
-      rates: JSON.stringify({ grains: 11, fruits: 17, vegetables: 14 }),
+      rates: '{"grains": 11, "fruits": 17, "vegetables": 14}',
       is_active: true
     }
   ];
@@ -221,7 +232,7 @@ export default function MyStore({ farmerId }) {
     return start.toISOString().split('T')[0];
   };
 
-  // Filter and sort logic
+  // Filter and sort logic with safe JSON parsing
   const filteredWarehouses = warehouses
     .filter(warehouse => {
       const matchesSearch = warehouse.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -231,13 +242,13 @@ export default function MyStore({ farmerId }) {
     })
     .sort((a, b) => {
       if (sortOption === "price-asc") {
-        const rateA = parseFloat(JSON.parse(a.rates || '{}').grains || 0);
-        const rateB = parseFloat(JSON.parse(b.rates || '{}').grains || 0);
+        const rateA = parseFloat(safeJsonParse(a.rates).grains || 0);
+        const rateB = parseFloat(safeJsonParse(b.rates).grains || 0);
         return rateA - rateB;
       }
       if (sortOption === "price-desc") {
-        const rateA = parseFloat(JSON.parse(a.rates || '{}').grains || 0);
-        const rateB = parseFloat(JSON.parse(b.rates || '{}').grains || 0);
+        const rateA = parseFloat(safeJsonParse(a.rates).grains || 0);
+        const rateB = parseFloat(safeJsonParse(b.rates).grains || 0);
         return rateB - rateA;
       }
       if (sortOption === "capacity") return parseFloat(b.capacity) - parseFloat(a.capacity);
@@ -341,7 +352,7 @@ export default function MyStore({ farmerId }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredWarehouses.map(warehouse => {
               const securityStyle = securityLevelStyles[warehouse.security_level] || { color: 'gray', icon: '🔒' };
-              const rates = JSON.parse(warehouse.rates || '{}');
+              const rates = safeJsonParse(warehouse.rates, { grains: 0, fruits: 0, vegetables: 0 });
               const baseRate = parseFloat(rates.grains || 0);
               
               return (

@@ -11,7 +11,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-key'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
-    WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY') or 'your-weather-api-key'
+    WEATHER_API_KEY = os.environ.get('WEATHER_API_KEY') or 'your-weatherapi-key-here'  # WeatherAPI.com key
     UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')

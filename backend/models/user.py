@@ -25,6 +25,8 @@ class User(db.Model):
     received_messages = db.relationship('Message', foreign_keys='Message.receiver_id', backref='receiver', lazy=True)
     
     def set_password(self, password):
+        if password is None:
+            raise ValueError("Password cannot be None")
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):

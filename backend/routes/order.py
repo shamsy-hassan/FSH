@@ -7,6 +7,7 @@ from extensions import db
 import datetime
 import random
 import string
+import json
 
 order_bp = Blueprint('order', __name__)
 
@@ -14,7 +15,9 @@ order_bp = Blueprint('order', __name__)
 @jwt_required()
 def get_orders():
     try:
-        current_user = get_jwt_identity()
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
+        user_type = identity['type']
         
         # Query params
         page = request.args.get("page", 1, type=int)
@@ -24,23 +27,9 @@ def get_orders():
         # Determine base query
         query = Order.query
         
-        # Handle different JWT token structures
-        user_type = None
-        user_id = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-            user_id = current_user.get("id") or current_user.get("user_id")
-        else:
-            user_id = current_user
-            user_type = "user"
-        
         # If not admin, filter by user ID
         if user_type != "admin":
-            if user_id:
-                query = query.filter_by(user_id=user_id)
-            else:
-                return jsonify({'message': 'User ID not found in token'}), 400
+            query = query.filter_by(user_id=user_id)
         
         # Apply status filter if provided
         if status and status != "all":
@@ -76,19 +65,11 @@ def get_orders():
 @jwt_required()
 def get_order(order_id):
     try:
-        current_user = get_jwt_identity()
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
+        user_type = identity['type']
+        
         order = Order.query.get_or_404(order_id)
-        
-        # Handle different JWT token structures
-        user_type = None
-        user_id = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-            user_id = current_user.get("id") or current_user.get("user_id")
-        else:
-            user_id = current_user
-            user_type = "user"
         
         # Check authorization
         if user_type == 'user' and order.user_id != user_id:
@@ -105,18 +86,9 @@ def get_order(order_id):
 @jwt_required()
 def create_order():
     try:
-        current_user = get_jwt_identity()
-        
-        # Handle different JWT token structures
-        user_type = None
-        user_id = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-            user_id = current_user.get("id") or current_user.get("user_id")
-        else:
-            user_id = current_user
-            user_type = "user"
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
+        user_type = identity['type']
         
         if user_type != 'user':
             return jsonify({'message': 'User access required'}), 403

@@ -117,33 +117,30 @@ function AgroClimate() {
         return;
       }
 
-      // Real weather API call using OpenWeatherMap
-      const apiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; // Replace with your actual API key
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${region.latitude}&lon=${region.longitude}&appid=${apiKey}&units=metric`;
-
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Weather API error');
-
-      const data = await response.json();
-      const weather = {
-        temperature: Math.round(data.main.temp),
-        feels_like: Math.round(data.main.feels_like),
-        humidity: data.main.humidity,
-        rainfall: data.rain ? data.rain['1h'] || 0 : 0,
-        wind_speed: Math.round(data.wind.speed * 3.6), // Convert m/s to km/h
-        wind_direction: data.wind.deg,
-        weather_condition: data.weather[0].main,
-        description: data.weather[0].description,
-        pressure: data.main.pressure,
-        visibility: data.visibility ? Math.round(data.visibility / 1000) : null,
-        sunrise: new Date(data.sys.sunrise * 1000).toLocaleTimeString(),
-        sunset: new Date(data.sys.sunset * 1000).toLocaleTimeString(),
-        last_updated: new Date().toLocaleString(),
-        source: 'OpenWeatherMap'
-      };
-
-      setWeatherData(weather);
-      setError(null);
+      // Call backend weather API
+      const weatherResponse = await agriConnectAPI.agroclimate.getWeather(region.id);
+      
+      if (weatherResponse) {
+        setWeatherData({
+          temperature: Math.round(weatherResponse.temperature || 0),
+          feels_like: Math.round(weatherResponse.temperature || 0), // Backend doesn't provide feels_like
+          humidity: weatherResponse.humidity || 0,
+          rainfall: weatherResponse.rainfall || 0,
+          wind_speed: Math.round((weatherResponse.wind_speed || 0) * 3.6), // Convert m/s to km/h if needed
+          wind_direction: weatherResponse.wind_direction || 0,
+          weather_condition: weatherResponse.weather_condition || 'Unknown',
+          description: weatherResponse.weather_condition || 'No description available',
+          pressure: 1013, // Not provided by backend, using default
+          visibility: 10, // Not provided by backend, using default
+          sunrise: new Date().toLocaleTimeString(), // Default values since backend doesn't provide
+          sunset: new Date().toLocaleTimeString(),
+          last_updated: new Date().toLocaleString(),
+          source: 'Backend API'
+        });
+        setError(null);
+      } else {
+        throw new Error('No weather data received from backend');
+      }
     } catch (err) {
       console.error('Weather API failed:', err);
       // Set fallback mock data (graceful fallback)

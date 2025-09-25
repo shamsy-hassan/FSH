@@ -23,6 +23,12 @@ def register():
             user_data = data
             profile_data = data
         
+        # Validate required user fields
+        required_fields = ['username', 'email', 'password']
+        for field in required_fields:
+            if not user_data.get(field):
+                return jsonify({'error': f'{field.capitalize()} is required'}), 400
+        
         # Check if username already exists
         if User.query.filter_by(username=user_data.get('username')).first():
             return jsonify({'error': 'Username already exists'}), 400

@@ -6,6 +6,7 @@ from extensions import db
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import json
 
 # Configure upload folder
 UPLOAD_FOLDER = 'static/uploads'
@@ -110,8 +111,8 @@ def get_product(product_id):
 @jwt_required()
 def get_cart():
     try:
-        identity = get_jwt_identity()
-        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
         
         cart = Cart.query.filter_by(user_id=user_id).first()
         
@@ -131,8 +132,8 @@ def get_cart():
 @jwt_required()
 def add_to_cart():
     try:
-        identity = get_jwt_identity()
-        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
         data = request.get_json()
         
         if not data or 'product_id' not in data:
@@ -180,8 +181,8 @@ def add_to_cart():
 @jwt_required()
 def update_cart_item(item_id):
     try:
-        identity = get_jwt_identity()
-        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
         data = request.get_json()
         
         if not data or 'quantity' not in data:
@@ -213,8 +214,8 @@ def update_cart_item(item_id):
 @jwt_required()
 def remove_from_cart(item_id):
     try:
-        identity = get_jwt_identity()
-        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
         
         item = CartItem.query.get_or_404(item_id)
         
@@ -235,8 +236,8 @@ def remove_from_cart(item_id):
 @jwt_required()
 def clear_cart():
     try:
-        identity = get_jwt_identity()
-        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
         
         cart = Cart.query.filter_by(user_id=user_id).first()
         

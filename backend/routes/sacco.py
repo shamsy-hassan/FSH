@@ -15,12 +15,24 @@ sacco_bp = Blueprint('sacco', __name__)
 @sacco_bp.route('/saccos', methods=['GET'])
 def get_saccos():
     region = request.args.get('region')
+    search = request.args.get('search')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
     query = Sacco.query.filter_by(is_active=True)
+    
     if region:
         query = query.filter_by(region=region)
+    
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Sacco.name.ilike(search_term),
+                Sacco.description.ilike(search_term),
+                Sacco.location.ilike(search_term)
+            )
+        )
     
     saccos = query.paginate(page=page, per_page=per_page, error_out=False)
     
@@ -32,10 +44,143 @@ def get_saccos():
     })
 
 
+@sacco_bp.route('/saccos', methods=['POST'])
+@jwt_required()
+def create_sacco():
+    identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
+    if identity.get('type') != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    data = request.form.to_dict()
+    print(f"DEBUG: Received SACCO creation data: {data}")  # Debug log
+    
+    # Validate required fields
+    required_fields = ['name', 'description', 'region', 'location', 'registration_number']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'message': f'{field} is required'}), 400
+    
+    # Check if SACCO name or registration number already exists
+    existing_name = Sacco.query.filter_by(name=data['name']).first()
+    if existing_name:
+        return jsonify({'message': 'SACCO name already exists'}), 400
+        
+    existing_reg = Sacco.query.filter_by(registration_number=data['registration_number']).first()
+    if existing_reg:
+        return jsonify({'message': 'Registration number already exists'}), 400
+    
+    # Parse founded_date if provided
+    founded_date = None
+    if data.get('founded_date'):
+        try:
+            founded_date = datetime.datetime.strptime(data['founded_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    
+    # Create new SACCO
+    print(f"DEBUG: Creating SACCO with name: {data['name']}, region: {data['region']}")  # Debug log
+    sacco = Sacco(
+        name=data['name'],
+        description=data['description'],
+        registration_number=data['registration_number'],
+        location=data['location'],
+        region=data['region'],
+        founded_date=founded_date,
+        total_members=int(data.get('total_members', 0)),
+        total_assets=Decimal(data.get('total_assets', '0.00'))
+    )
+    
+    print(f"DEBUG: About to add SACCO to database session")  # Debug log
+    db.session.add(sacco)
+    print(f"DEBUG: About to commit SACCO to database")  # Debug log
+    db.session.commit()
+    print(f"DEBUG: SACCO committed successfully with ID: {sacco.id}")  # Debug log
+    
+    return jsonify({
+        'message': 'SACCO created successfully',
+        'sacco': sacco.to_dict()
+    }), 201
+
+
 @sacco_bp.route('/saccos/<int:sacco_id>', methods=['GET'])
 def get_sacco(sacco_id):
     sacco = Sacco.query.get_or_404(sacco_id)
     return jsonify(sacco.to_dict())
+
+
+@sacco_bp.route('/saccos/<int:sacco_id>', methods=['PUT'])
+@jwt_required()
+def update_sacco(sacco_id):
+    identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
+    if identity.get('type') != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    sacco = Sacco.query.get_or_404(sacco_id)
+    data = request.form.to_dict()
+    
+    # Check if name or registration number conflicts with other SACCOs
+    if data.get('name') and data['name'] != sacco.name:
+        existing_name = Sacco.query.filter_by(name=data['name']).first()
+        if existing_name:
+            return jsonify({'message': 'SACCO name already exists'}), 400
+    
+    if data.get('registration_number') and data['registration_number'] != sacco.registration_number:
+        existing_reg = Sacco.query.filter_by(registration_number=data['registration_number']).first()
+        if existing_reg:
+            return jsonify({'message': 'Registration number already exists'}), 400
+    
+    # Update fields
+    if data.get('name'):
+        sacco.name = data['name']
+    if data.get('description'):
+        sacco.description = data['description']
+    if data.get('registration_number'):
+        sacco.registration_number = data['registration_number']
+    if data.get('location'):
+        sacco.location = data['location']
+    if data.get('region'):
+        sacco.region = data['region']
+    if data.get('founded_date'):
+        try:
+            sacco.founded_date = datetime.datetime.strptime(data['founded_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    if data.get('total_members'):
+        sacco.total_members = int(data['total_members'])
+    if data.get('total_assets'):
+        sacco.total_assets = Decimal(data['total_assets'])
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'SACCO updated successfully',
+        'sacco': sacco.to_dict()
+    })
+
+
+@sacco_bp.route('/saccos/<int:sacco_id>', methods=['DELETE'])
+@jwt_required()
+def delete_sacco(sacco_id):
+    identity = get_jwt_identity()
+    if isinstance(identity, str):
+        identity = json.loads(identity)
+
+    if identity.get('type') != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    sacco = Sacco.query.get_or_404(sacco_id)
+    sacco.is_active = False
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'SACCO deactivated successfully'
+    })
 
 
 @sacco_bp.route('/saccos/<int:sacco_id>/join', methods=['POST'])

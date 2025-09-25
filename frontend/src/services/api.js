@@ -22,15 +22,26 @@ class AgriConnectAPI {
         return headers;
     }
 
-    // Handle API responses
-    async handleResponse(response) {
-        if (response.ok) {
+   // Handle API responses
+async handleResponse(response) {
+    const contentType = response.headers.get('content-type');
+    
+    if (response.ok) {
+        if (contentType && contentType.includes('application/json')) {
             return await response.json();
         } else {
-            const error = await response.json();
-            throw new Error(error.message || 'API request failed');
+            return await response.text();
         }
+    } else {
+        let error;
+        if (contentType && contentType.includes('application/json')) {
+            error = await response.json();
+        } else {
+            error = { message: await response.text() };
+        }
+        throw new Error(error.message || 'API request failed');
     }
+}
 
     // Authentication API calls
     auth = {
@@ -237,48 +248,54 @@ class AgriConnectAPI {
             return await this.handleResponse(response);
         },
 
-        // User cart operations
-        getCart: async () => {
-            const response = await fetch(`${API_BASE_URL}/ecommerce/cart`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-            return await this.handleResponse(response);
-        },
+       // User cart operations
+    getCart: async () => {
+        const response = await fetch(`${API_BASE_URL}/ecommerce/cart`, {
+            method: 'GET',
+            headers: this.getHeaders(), // Use class method instead of getToken()
+        });
+        
+        return await this.handleResponse(response);
+    },
+    
+    addToCart: async (productId, quantity = 1) => {
+        const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items`, {
+            method: 'POST',
+            headers: this.getHeaders(), // Use class method instead of getToken()
+            body: JSON.stringify({
+                product_id: productId,
+                quantity: quantity
+            })
+        });
+        
+        return await this.handleResponse(response);
+    },
+    
+    removeFromCart: async (itemId) => {
+        const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items/${itemId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(), // Use class method instead of getToken()
+        });
+        
+        return await this.handleResponse(response);
+    },
+    
+    clearCart: async () => {
+        const response = await fetch(`${API_BASE_URL}/ecommerce/cart/clear`, {
+            method: 'DELETE',
+            headers: this.getHeaders(), // Use class method instead of getToken()
+        });
+        
+        return await this.handleResponse(response);
+    },
 
-        addToCart: async (productId, quantity = 1) => {
-            const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items`, {
+
+        // Place order from cart
+        placeOrder: async (orderData) => {
+            const response = await fetch(`${API_BASE_URL}/order/orders`, {
                 method: 'POST',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ 
-                    product_id: productId, 
-                    quantity: quantity 
-                }),
-            });
-            return await this.handleResponse(response);
-        },
-
-        updateCartItem: async (itemId, quantity) => {
-            const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items/${itemId}`, {
-                method: 'PUT',
-                headers: this.getHeaders(),
-                body: JSON.stringify({ quantity }),
-            });
-            return await this.handleResponse(response);
-        },
-
-        removeFromCart: async (itemId) => {
-            const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items/${itemId}`, {
-                method: 'DELETE',
-                headers: this.getHeaders(),
-            });
-            return await this.handleResponse(response);
-        },
-
-        clearCart: async () => {
-            const response = await fetch(`${API_BASE_URL}/ecommerce/cart/clear`, {
-                method: 'DELETE',
-                headers: this.getHeaders(),
+                body: JSON.stringify(orderData),
             });
             return await this.handleResponse(response);
         },
@@ -539,166 +556,295 @@ class AgriConnectAPI {
     };
 
     // SACCO API calls
-    sacco = {
-        // Get all SACCOS with optional region filtering
-        getSaccos: async (region = null, page = 1, perPage = 20) => {
-            let url = `${API_BASE_URL}/sacco/saccos?page=${page}&per_page=${perPage}`;
-            if (region) {
-                url += `&region=${region}`;
+sacco = {
+    // Get all SACCOS with optional region filtering
+    getSaccos: async (params = null, page = 1, perPage = 20) => {
+        let url = `${API_BASE_URL}/sacco/saccos?page=${page}&per_page=${perPage}`;
+        
+        // Handle both string region parameter (admin) and object parameter (user)
+        if (typeof params === 'string' && params) {
+            url += `&region=${params}`;
+        } else if (typeof params === 'object' && params) {
+            if (params.region) {
+                url += `&region=${params.region}`;
             }
-
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
-        },
-
-        // Get specific SACCO
-        getSacco: async (saccoId) => {
-            const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
-        },
-
-        // Join a SACCO
-        joinSacco: async (saccoId) => {
-            const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}/join`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
-        },
-
-        // Get user's SACCO memberships
-        getMemberships: async () => {
-            const response = await fetch(`${API_BASE_URL}/sacco/membership`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
-
-            return await this.handleResponse(response);
-        },
-
-        // Get loans with optional SACCO filtering
-        getLoans: async (saccoId = null, page = 1, perPage = 20) => {
-            let url = `${API_BASE_URL}/sacco/loans?page=${page}&per_page=${perPage}`;
-            if (saccoId) {
-                url += `&sacco_id=${saccoId}`;
+            if (params.search) {
+                url += `&search=${params.search}`;
             }
+        }
 
-            const response = await fetch(url, {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get specific SACCO
+    getSacco: async (saccoId) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Create a new SACCO (admin only)
+    createSacco: async (formData) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+            },
+            body: formData,
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Update SACCO (admin only)
+    updateSacco: async (saccoId, formData) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+            },
+            body: formData,
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Deactivate SACCO (admin only)
+    deactivateSacco: async (saccoId) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}/deactivate`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Join a SACCO
+    joinSacco: async (saccoId) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}/join`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get user's SACCO memberships
+    getMemberships: async () => {
+        const response = await fetch(`${API_BASE_URL}/sacco/membership`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get loans with optional SACCO filtering
+    getLoans: async (saccoId = null, page = 1, perPage = 20) => {
+        let url = `${API_BASE_URL}/sacco/loans?page=${page}&per_page=${perPage}`;
+        if (saccoId) {
+            url += `&sacco_id=${saccoId}`;
+        }
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Apply for a loan
+    applyForLoan: async (loanData) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/loan-applications`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(loanData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get loan applications
+    getLoanApplications: async (saccoId = null) => {
+        let url = `${API_BASE_URL}/sacco/loan-applications`;
+        if (saccoId) {
+            url += `?sacco_id=${saccoId}`;
+        }
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Update loan application status
+    updateLoanStatus: async (applicationId, statusData) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/loan-applications/${applicationId}/status`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(statusData),
+        });
+
+        return await this.handleResponse(response);
+    },
+};
+
+    // Agroclimate API calls
+agroclimate = {
+    // Get all regions
+    getRegions: async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/agroclimate/regions`, {
                 method: 'GET',
                 headers: this.getHeaders(),
             });
-
-            return await this.handleResponse(response);
-        },
-
-        // Apply for a loan
-        applyForLoan: async (loanData) => {
-            const response = await fetch(`${API_BASE_URL}/sacco/loan-applications`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-                body: JSON.stringify(loanData),
-            });
-
-            return await this.handleResponse(response);
-        },
-
-        // Get loan applications
-        getLoanApplications: async (saccoId = null) => {
-            let url = `${API_BASE_URL}/sacco/loan-applications`;
-            if (saccoId) {
-                url += `?sacco_id=${saccoId}`;
+            if (!response.ok) {
+                throw new Error('Failed to fetch regions');
             }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching regions:', error);
+            return { regions: [] };
+        }
+    },
 
-            const response = await fetch(url, {
+    // Get specific region
+    getRegion: async (regionId) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
                 method: 'GET',
                 headers: this.getHeaders(),
             });
-
-            return await this.handleResponse(response);
-        },
-    };
-
-     // Agroclimate API calls
-    agroclimate = {
-        // Get all regions
-        getRegions: async () => {
-            try {
-                const response = await fetch(`${API_BASE_URL}/agroclimate/regions`, {
-                    method: 'GET',
-                    headers: this.getHeaders(),
-                });
-                // If response is not ok, throw error to be caught below
-                if (!response.ok) {
-                    throw new Error('Failed to fetch regions');
-                }
-                return await response.json();
-            } catch (error) {
-                // Return empty array instead of throwing, so UI can still render
-                return [];
+            if (!response.ok) {
+                throw new Error('Failed to fetch region');
             }
-        },
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching region:', error);
+            return null;
+        }
+    },
 
-        // Get specific region
-        getRegion: async (regionId) => {
-            try {
-                const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
-                    method: 'GET',
-                    headers: this.getHeaders(),
-                });
-                if (!response.ok) {
-                    throw new Error('Failed to fetch region');
-                }
-                return await response.json();
-            } catch (error) {
-                return null;
-            }
-        },
+    // Create region (admin only)
+    createRegion: async (regionData) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/regions`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(regionData),
+        });
+        return await this.handleResponse(response);
+    },
 
-        // Get weather data for a region
-        getWeather: async (regionId) => {
-            const response = await fetch(`${API_BASE_URL}/agroclimate/weather/${regionId}`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
+    // Update region (admin only)
+    updateRegion: async (regionId, regionData) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(regionData),
+        });
+        return await this.handleResponse(response);
+    },
 
-            return await this.handleResponse(response);
-        },
+    // Delete region (admin only)
+    deleteRegion: async (regionId) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/regions/${regionId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
 
-        // Get crop recommendations for a region
-        getCropRecommendations: async (regionId, season = null) => {
-            let url = `${API_BASE_URL}/agroclimate/crop-recommendations/${regionId}`;
-            if (season) {
-                url += `?season=${season}`;
-            }
+    // Get weather data for a region
+    getWeather: async (regionId) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/weather/${regionId}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
+    // Get crop recommendations for a region
+    getCropRecommendations: async (regionId, season = null) => {
+        let url = `${API_BASE_URL}/agroclimate/crop-recommendations/${regionId}`;
+        if (season) {
+            url += `?season=${season}`;
+        }
 
-            return await this.handleResponse(response);
-        },
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
 
-        // Create crop recommendation (admin only)
-        createCropRecommendation: async (recommendationData) => {
-            const response = await fetch(`${API_BASE_URL}/agroclimate/crop-recommendations`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-                body: JSON.stringify(recommendationData),
-            });
+    // Create crop recommendation (admin only) - MISSING METHOD
+    createCropRecommendation: async (recommendationData) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/crop-recommendations`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(recommendationData),
+        });
+        return await this.handleResponse(response);
+    },
 
-            return await this.handleResponse(response);
-        },
-    };
+    // Update crop recommendation (admin only) - MISSING METHOD
+    updateCropRecommendation: async (recommendationId, recommendationData) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/crop-recommendations/${recommendationId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(recommendationData),
+        });
+        return await this.handleResponse(response);
+    },
+
+    // Delete crop recommendation (admin only) - MISSING METHOD
+    deleteCropRecommendation: async (recommendationId) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/crop-recommendations/${recommendationId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
+
+    // Get all crop recommendations (admin overview)
+    getAllCropRecommendations: async (page = 1, perPage = 50) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/crop-recommendations?page=${page}&per_page=${perPage}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
+
+    // Create weather data (admin only)
+    createWeatherData: async (weatherData) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/weather`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(weatherData),
+        });
+        return await this.handleResponse(response);
+    },
+
+    // Get seasonal advice
+    getSeasonalAdvice: async (regionId, month) => {
+        const response = await fetch(`${API_BASE_URL}/agroclimate/seasonal-advice/${regionId}?month=${month}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+        return await this.handleResponse(response);
+    },
+};
 
     // Skill API calls
     skill = {
@@ -771,72 +917,127 @@ class AgriConnectAPI {
 
             return await this.handleResponse(response);
         },
+
+         // Update skill (admin only) - MISSING METHOD
+    updateSkill: async (skillId, skillData) => {
+        const response = await fetch(`${API_BASE_URL}/skill/skills/${skillId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(skillData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Delete skill (admin only) - MISSING METHOD
+    deleteSkill: async (skillId) => {
+        const response = await fetch(`${API_BASE_URL}/skill/skills/${skillId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
     };
 
     // Storage API calls
-    storage = {
-        // Get warehouses with optional region filtering
-        getWarehouses: async (region = null, page = 1, perPage = 20) => {
-            let url = `${API_BASE_URL}/storage/warehouses?page=${page}&per_page=${perPage}`;
-            if (region) {
-                url += `&region=${region}`;
-            }
+storage = {
+    // Get warehouses with optional region filtering
+    getWarehouses: async (region = null, page = 1, perPage = 20) => {
+        let url = `${API_BASE_URL}/storage/warehouses?page=${page}&per_page=${perPage}`;
+        if (region) {
+            url += `&region=${region}`;
+        }
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
 
-            return await this.handleResponse(response);
-        },
+        return await this.handleResponse(response);
+    },
 
-        // Get specific warehouse
-        getWarehouse: async (warehouseId) => {
-            const response = await fetch(`${API_BASE_URL}/storage/warehouses/${warehouseId}`, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
+    // Get specific warehouse
+    getWarehouse: async (warehouseId) => {
+        const response = await fetch(`${API_BASE_URL}/storage/warehouses/${warehouseId}`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
 
-            return await this.handleResponse(response);
-        },
+        return await this.handleResponse(response);
+    },
 
-        // Create storage request
-        createStorageRequest: async (requestData) => {
-            const response = await fetch(`${API_BASE_URL}/storage/storage-requests`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-                body: JSON.stringify(requestData),
-            });
+    // Create warehouse (admin only) - MISSING METHOD
+    createWarehouse: async (warehouseData) => {
+        const response = await fetch(`${API_BASE_URL}/storage/warehouses`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(warehouseData),
+        });
 
-            return await this.handleResponse(response);
-        },
+        return await this.handleResponse(response);
+    },
 
-        // Get storage requests
-        getStorageRequests: async (warehouseId = null) => {
-            let url = `${API_BASE_URL}/storage/storage-requests`;
-            if (warehouseId) {
-                url += `?warehouse_id=${warehouseId}`;
-            }
+    // Update warehouse (admin only) - MISSING METHOD
+    updateWarehouse: async (warehouseId, warehouseData) => {
+        const response = await fetch(`${API_BASE_URL}/storage/warehouses/${warehouseId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(warehouseData),
+        });
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: this.getHeaders(),
-            });
+        return await this.handleResponse(response);
+    },
 
-            return await this.handleResponse(response);
-        },
+    // Update warehouse status (admin only) - MISSING METHOD
+    updateWarehouseStatus: async (warehouseId, isActive) => {
+        const response = await fetch(`${API_BASE_URL}/storage/warehouses/${warehouseId}/status`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ is_active: isActive }),
+        });
 
-        // Update storage request status (admin only)
-        updateStorageRequestStatus: async (requestId, status) => {
-            const response = await fetch(`${API_BASE_URL}/storage/storage-requests/${requestId}/status`, {
-                method: 'PUT',
-                headers: this.getHeaders(),
-                body: JSON.stringify({ status: status }),
-            });
+        return await this.handleResponse(response);
+    },
 
-            return await this.handleResponse(response);
-        },
-    };
+    // Create storage request
+    createStorageRequest: async (requestData) => {
+        const response = await fetch(`${API_BASE_URL}/storage/storage-requests`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(requestData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get storage requests
+    getStorageRequests: async (warehouseId = null) => {
+        let url = `${API_BASE_URL}/storage/storage-requests`;
+        if (warehouseId) {
+            url += `?warehouse_id=${warehouseId}`;
+        }
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Update storage request status (admin only)
+    updateStorageRequestStatus: async (requestId, status) => {
+        const response = await fetch(`${API_BASE_URL}/storage/storage-requests/${requestId}/status`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ status: status }),
+        });
+
+        return await this.handleResponse(response);
+    },
+};
 
     // Message API calls
     message = {

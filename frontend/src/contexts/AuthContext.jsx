@@ -144,23 +144,32 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      const userData = {
-        user: {
-          username: registrationData.username,
-          email: registrationData.email,
-          password: registrationData.password,
-          user_type: registrationData.user_type || 'farmer'
-        },
-        profile: {
-          first_name: registrationData.first_name,
-          last_name: registrationData.last_name,
-          phone: registrationData.phone,
-          address: registrationData.address,
-          region: registrationData.region,
-          farm_size: registrationData.farm_size ? parseFloat(registrationData.farm_size) : null,
-          gender: registrationData.gender
-        }
-      };
+      // Handle both nested and flat data structures
+      let userData, profileData;
+      
+      if (registrationData.user && registrationData.profile) {
+        // Data is already structured (from Register.jsx)
+        userData = registrationData;
+      } else {
+        // Data is flat (backwards compatibility)
+        userData = {
+          user: {
+            username: registrationData.username,
+            email: registrationData.email,
+            password: registrationData.password,
+            user_type: registrationData.user_type || 'farmer'
+          },
+          profile: {
+            first_name: registrationData.first_name,
+            last_name: registrationData.last_name,
+            phone: registrationData.phone,
+            address: registrationData.address,
+            region: registrationData.region,
+            farm_size: registrationData.farm_size ? parseFloat(registrationData.farm_size) : null,
+            gender: registrationData.gender
+          }
+        };
+      }
 
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',

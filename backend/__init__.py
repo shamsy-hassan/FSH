@@ -1,6 +1,6 @@
 from flask import Flask
 from backend.config import config
-from backend.extensions import db, jwt, mail, photos, documents, videos
+from backend.extensions import db, jwt, mail
 
 def create_app(config_name='default'):
     app = Flask(__name__)
@@ -10,9 +10,12 @@ def create_app(config_name='default'):
     db.init_app(app)
     jwt.init_app(app)
     mail.init_app(app)
-    configure_uploads(app, photos)
-    configure_uploads(app, documents)
-    configure_uploads(app, videos)
+    
+    # Configure upload folder
+    import os
+    upload_folder = os.path.join(app.instance_path, 'uploads')
+    os.makedirs(upload_folder, exist_ok=True)
+    app.config['UPLOAD_FOLDER'] = upload_folder
     
     # Register blueprints
     from backend.routes.auth import auth_bp
