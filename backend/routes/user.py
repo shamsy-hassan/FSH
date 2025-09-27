@@ -8,12 +8,16 @@ user_bp = Blueprint('user', __name__)
 @user_bp.route('/dashboard', methods=['GET'])
 @jwt_required()
 def user_dashboard():
-    identity = get_jwt_identity()
+    import json
+    identity = json.loads(get_jwt_identity())
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     
     user_id = identity['id']
     user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
     
     # Get user statistics
     from models.order import Order

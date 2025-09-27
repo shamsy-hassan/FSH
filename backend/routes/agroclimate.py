@@ -65,47 +65,41 @@ def get_weather(region_id):
         from config import Config
         API_KEY = Config.WEATHER_API_KEY
         
-        # Use WeatherAPI.com for better debugging and more reliable data
-        if API_KEY == "your-weatherapi-key-here":
-            # Return mock weather data for testing when no API key is configured
-            print("DEBUG: Using mock weather data (no WeatherAPI key configured)")
-            parsed_weather = {
-                'temperature': 25.5,
-                'humidity': 65,
-                'rainfall': 0.2,
-                'wind_speed': 3.5,
-                'wind_direction': 180,
-                'weather_condition': 'Partly Cloudy'
-            }
-        else:
-            # WeatherAPI.com current weather endpoint
-            base_url = f"http://api.weatherapi.com/v1/current.json?key={API_KEY}&q={region.latitude},{region.longitude}&aqi=no"
-            
-            print(f"DEBUG: Fetching weather from WeatherAPI: {base_url}")
-            response = requests.get(base_url)
-            
-            if response.status_code != 200:
-                print(f"DEBUG: WeatherAPI request failed with status {response.status_code}: {response.text}")
-                return jsonify({
-                    'message': 'Failed to fetch weather data from WeatherAPI',
-                    'error': response.text,
-                    'status_code': response.status_code
-                }), 500
-            
-            weather_data = response.json()
-            print(f"DEBUG: WeatherAPI response: {weather_data}")
-            
-            current = weather_data.get('current', {})
-            condition = current.get('condition', {})
-            
-            parsed_weather = {
-                'temperature': current.get('temp_c', 0),
-                'humidity': current.get('humidity', 0), 
-                'rainfall': current.get('precip_mm', 0.0),
-                'wind_speed': current.get('wind_kph', 0) / 3.6,  # Convert km/h to m/s
-                'wind_direction': current.get('wind_degree', 0),
-                'weather_condition': condition.get('text', 'Unknown')
-            }
+        # Check if API key is configured
+        if API_KEY == "your-weatherapi-key-here" or not API_KEY:
+            return jsonify({
+                'message': 'Weather API key not configured',
+                'error': 'Please set WEATHER_API_KEY environment variable with your WeatherAPI.com key'
+            }), 503
+        
+        # WeatherAPI.com current weather endpoint
+        base_url = f"http://api.weatherapi.com/v1/current.json?key={API_KEY}&q={region.latitude},{region.longitude}&aqi=no"
+        
+        print(f"DEBUG: Fetching weather from WeatherAPI: {base_url}")
+        response = requests.get(base_url, timeout=10)
+        
+        if response.status_code != 200:
+            print(f"DEBUG: WeatherAPI request failed with status {response.status_code}: {response.text}")
+            return jsonify({
+                'message': 'Failed to fetch weather data from WeatherAPI',
+                'error': response.text,
+                'status_code': response.status_code
+            }), 502
+        
+        weather_data = response.json()
+        print(f"DEBUG: WeatherAPI response: {weather_data}")
+        
+        current = weather_data.get('current', {})
+        condition = current.get('condition', {})
+        
+        parsed_weather = {
+            'temperature': current.get('temp_c', 0),
+            'humidity': current.get('humidity', 0), 
+            'rainfall': current.get('precip_mm', 0.0),
+            'wind_speed': current.get('wind_kph', 0) / 3.6,  # Convert km/h to m/s
+            'wind_direction': current.get('wind_degree', 0),
+            'weather_condition': condition.get('text', 'Unknown')
+        }
         
         # Save to database
         new_weather = WeatherData(
@@ -118,7 +112,20 @@ def get_weather(region_id):
         
         return jsonify(new_weather.to_dict())
     
+    except requests.exceptions.Timeout:
+        print("DEBUG: WeatherAPI request timed out")
+        return jsonify({
+            'message': 'Weather service request timed out',
+            'error': 'Weather data service is currently unavailable'
+        }), 504
+    except requests.exceptions.ConnectionError:
+        print("DEBUG: WeatherAPI connection error")
+        return jsonify({
+            'message': 'Unable to connect to weather service',
+            'error': 'Weather data service is currently unavailable'
+        }), 503
     except Exception as e:
+        print(f"DEBUG: Weather API error: {str(e)}")
         return jsonify({
             'message': 'Failed to fetch weather data',
             'error': str(e)

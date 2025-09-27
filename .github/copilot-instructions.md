@@ -45,6 +45,8 @@ npm run dev  # Runs on :5173 with Vite
 - **Routing:** User routes `/user/*`, admin routes `/admin/*`, public routes at root
 - **State:** AuthContext for user state, localStorage for token persistence
 - **Components:** Layout wrapper with Navbar/Sidebar, ProtectedRoute for auth
+- **Dashboard Data:** Use `api.user.getDashboard()` and `api.admin.getDashboard()` for real-time stats
+- **Loading States:** Always implement loading, error, and retry patterns for API calls
 
 ### Key Relationships
 - User → Profile (1:1), User → Orders (1:many), User → SaccoMemberships (many:many)
@@ -61,8 +63,10 @@ npm run dev  # Runs on :5173 with Vite
 
 ### Weather API Integration
 - External WeatherAPI.com integration in agroclimate routes
-- Config: `WEATHER_API_KEY` environment variable required
-- Caching pattern: Store weather data in WeatherData model
+- Config: `WEATHER_API_KEY` environment variable required (get free key at weatherapi.com)
+- Caching pattern: Store weather data in WeatherData model (daily cache)
+- Fallback: Returns proper error codes (503/502/504) when API unavailable
+- Rate limiting: Uses daily cache to avoid excessive API calls
 
 ### File Upload Pattern
 - Static uploads go to `backend/static/uploads/`
