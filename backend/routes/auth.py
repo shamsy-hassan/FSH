@@ -79,6 +79,7 @@ def login():
         data = request.get_json()
         username = data.get('username')
         password = data.get('password')
+        requested_type = data.get('user_type')  # Optional field to specify expected user type
         
         if not username or not password:
             return jsonify({'error': 'Username and password are required'}), 400
@@ -89,6 +90,10 @@ def login():
         if user and user.check_password(password):
             if not user.is_active:
                 return jsonify({'error': 'Account is deactivated'}), 401
+            
+            # If a specific user type was requested and it doesn't match, deny access
+            if requested_type == 'admin':
+                return jsonify({'error': 'Invalid credentials for admin access'}), 401
             
             # Create access token for user
             import json
@@ -116,6 +121,10 @@ def login():
         if admin and admin.check_password(password):
             if not admin.is_active:
                 return jsonify({'error': 'Admin account is deactivated'}), 401
+            
+            # If a specific user type was requested and it doesn't match, deny access
+            if requested_type == 'user':
+                return jsonify({'error': 'Invalid credentials for user access'}), 401
             
             # Create access token for admin
             import json

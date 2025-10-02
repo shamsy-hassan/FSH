@@ -18,7 +18,7 @@ class User(db.Model):
     profile = db.relationship('UserProfile', backref='user', uselist=False, cascade='all, delete-orphan')
     cart = db.relationship('Cart', backref='user', uselist=False, cascade='all, delete-orphan')
     orders = db.relationship('Order', backref='user', lazy=True)
-    market_posts = db.relationship('MarketPost', backref='user', lazy=True)
+    market_posts = db.relationship('MarketPost', foreign_keys='MarketPost.user_id', backref='user', lazy=True)
     sacco_memberships = db.relationship('SaccoMember', backref='user', lazy=True)
     storage_requests = db.relationship('StorageRequest', backref='user', lazy=True)
     sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy=True)

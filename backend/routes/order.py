@@ -162,15 +162,9 @@ def create_order():
 @jwt_required()
 def update_order_status(order_id):
     try:
-        current_user = get_jwt_identity()
-        
-        # Handle different JWT token structures
-        user_type = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-        else:
-            user_type = "user"
+        # Parse JWT identity correctly
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
@@ -209,18 +203,10 @@ def update_order_status(order_id):
 @jwt_required()
 def update_order(order_id):
     try:
-        current_user = get_jwt_identity()
-        
-        # Handle different JWT token structures
-        user_type = None
-        user_id = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-            user_id = current_user.get("id") or current_user.get("user_id")
-        else:
-            user_id = current_user
-            user_type = "user"
+        # Parse JWT identity correctly
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
+        user_id = identity.get('id')
         
         order = Order.query.get_or_404(order_id)
         
@@ -252,18 +238,10 @@ def update_order(order_id):
 @jwt_required()
 def cancel_order(order_id):
     try:
-        current_user = get_jwt_identity()
-        
-        # Handle different JWT token structures
-        user_type = None
-        user_id = None
-        
-        if isinstance(current_user, dict):
-            user_type = current_user.get("type") or current_user.get("user_type")
-            user_id = current_user.get("id") or current_user.get("user_id")
-        else:
-            user_id = current_user
-            user_type = "user"
+        # Parse JWT identity correctly
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
+        user_id = identity.get('id')
         
         order = Order.query.get_or_404(order_id)
         

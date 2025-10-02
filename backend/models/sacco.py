@@ -112,11 +112,46 @@ class LoanApplication(db.Model):
     repayment_end_date = db.Column(db.Date)
     
     def to_dict(self):
+        # Import here to avoid circular imports
+        from models.user import User
+        
+        # Get user details by querying directly
+        user = User.query.get(self.user_id)
+        user_data = {}
+        if user:
+            user_data = {
+                'username': user.username,
+                'email': user.email,
+                'user_type': user.user_type
+            }
+        
+        # Get loan details
+        loan_data = {}
+        if self.loan:
+            loan_data = {
+                'loan_name': self.loan.name,
+                'loan_type': self.loan.loan_type,
+                'interest_rate': float(self.loan.interest_rate) if self.loan.interest_rate else 0.0,
+                'max_amount': float(self.loan.max_amount) if self.loan.max_amount else 0.0,
+                'repayment_period_months': self.loan.repayment_period_months,
+                'sacco_name': self.loan.sacco.name if self.loan.sacco else None,
+                'sacco_id': self.loan.sacco_id
+            }
+        
+        # Calculate days since application
+        days_since_application = None
+        if self.application_date:
+            days_since_application = (datetime.date.today() - self.application_date).days
+        
+        # Calculate processing time for approved/rejected applications
+        processing_days = None
+        if self.approval_date and self.application_date:
+            processing_days = (self.approval_date - self.application_date).days
+        
         return {
             'id': self.id,
             'user_id': self.user_id,
             'loan_id': self.loan_id,
-            'loan_name': self.loan.name if self.loan else None,
             'amount': float(self.amount) if self.amount else 0.0,
             'purpose': self.purpose,
             'status': self.status,
@@ -124,5 +159,11 @@ class LoanApplication(db.Model):
             'approval_date': self.approval_date.isoformat() if self.approval_date else None,
             'disbursement_date': self.disbursement_date.isoformat() if self.disbursement_date else None,
             'repayment_start_date': self.repayment_start_date.isoformat() if self.repayment_start_date else None,
-            'repayment_end_date': self.repayment_end_date.isoformat() if self.repayment_end_date else None
+            'repayment_end_date': self.repayment_end_date.isoformat() if self.repayment_end_date else None,
+            'days_since_application': days_since_application,
+            'processing_days': processing_days,
+            # User details
+            **user_data,
+            # Loan details  
+            **loan_data
         }

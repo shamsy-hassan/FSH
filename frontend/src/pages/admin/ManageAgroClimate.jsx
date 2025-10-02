@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
 import { FiChevronDown, FiChevronUp, FiDownload, FiShare2, FiPrinter, FiMapPin, FiCalendar, FiDroplet, FiSun, FiThermometer } from 'react-icons/fi';
 import {
@@ -387,7 +388,7 @@ function ManageAgroClimate() {
 
         {/* Month Selector */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+          <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
             <FiCalendar className="mr-2" />
             Select Month for Seasonal Advice:
           </label>

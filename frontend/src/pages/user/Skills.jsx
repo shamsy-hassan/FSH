@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
+import { FiPlay, FiEye, FiClock, FiCheckCircle, FiBook, FiVideo, FiSearch, FiFilter } from 'react-icons/fi';
 
 const categories = [
   { id: 'crop-production', name: 'Crop Production', icon: '🌱' },
@@ -30,14 +32,15 @@ const difficultyStyles = {
 };
 
 export default function Skills() {
-  const [skills, setSkills] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [categoryFilter, setCategoryFilter] = useState('all')
-  const [difficultyFilter, setDifficultyFilter] = useState('all')
-  const [expandedSkillIds, setExpandedSkillIds] = useState([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [completedSkills, setCompletedSkills] = useState([])
+  const [skills, setSkills] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [expandedSkillIds, setExpandedSkillIds] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [completedSkills, setCompletedSkills] = useState([]);
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   useEffect(() => {
     fetchSkills();
@@ -69,6 +72,93 @@ export default function Skills() {
     );
   };
 
+  // Enhanced video URL formatting function
+  const formatVideoUrl = (url) => {
+    if (!url) return '';
+    
+    console.log('🎥 Formatting video URL:', url);
+    
+    // Handle YouTube URLs
+    if (url.includes('youtube.com/watch') || url.includes('m.youtube.com/watch')) {
+      const match = url.match(/[?&]v=([^&]+)/);
+      if (match && match[1]) {
+        const videoId = match[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+        console.log('✅ YouTube watch URL → embed:', embedUrl);
+        return embedUrl;
+      }
+    }
+    
+    if (url.includes('youtu.be/')) {
+      const match = url.match(/youtu\.be\/([^?]+)/);
+      if (match && match[1]) {
+        const videoId = match[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+        console.log('✅ YouTube short URL → embed:', embedUrl);
+        return embedUrl;
+      }
+    }
+    
+    // Handle YouTube embed URLs (already formatted)
+    if (url.includes('youtube.com/embed/')) {
+      console.log('✅ Already YouTube embed URL:', url);
+      return url;
+    }
+    
+    // Handle Vimeo URLs
+    if (url.includes('vimeo.com/')) {
+      const match = url.match(/vimeo\.com\/(\d+)/);
+      if (match && match[1]) {
+        const videoId = match[1];
+        const embedUrl = `https://player.vimeo.com/video/${videoId}`;
+        console.log('✅ Vimeo URL → embed:', embedUrl);
+        return embedUrl;
+      }
+    }
+    
+    // Handle local file URLs - check if it's already a full URL
+    if (url.startsWith('http')) {
+      console.log('✅ Already full URL:', url);
+      return url;
+    }
+    
+    // Handle local file paths
+    if (url.startsWith('/static/uploads/')) {
+      const localUrl = `http://localhost:5000${url}`;
+      console.log('✅ Local file URL (full path):', localUrl);
+      return localUrl;
+    } else {
+      const localUrl = `http://localhost:5000/static/uploads/${url}`;
+      console.log('✅ Local file URL (filename only):', localUrl);
+      return localUrl;
+    }
+  };
+
+  const isYouTubeUrl = (url) => {
+    return url && (
+      url.includes('youtube.com') || 
+      url.includes('youtu.be') ||
+      url.includes('youtube.com/embed/') ||
+      url.includes('m.youtube.com')
+    );
+  };
+
+  const isVimeoUrl = (url) => {
+    return url && (url.includes('vimeo.com') || url.includes('player.vimeo.com'));
+  };
+
+  const isEmbeddableUrl = (url) => {
+    return isYouTubeUrl(url) || isVimeoUrl(url);
+  };
+
+  const openVideoPlayer = (video, skillTitle) => {
+    setSelectedVideo({ ...video, skillTitle });
+  };
+
+  const closeVideoPlayer = () => {
+    setSelectedVideo(null);
+  };
+
   const filteredSkills = skills.filter(skill => {
     const matchesCategory = categoryFilter === 'all' || skill.category_id === categoryFilter;
     const matchesDifficulty = difficultyFilter === 'all' || skill.difficulty === difficultyFilter;
@@ -92,256 +182,434 @@ export default function Skills() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50">
+        <motion.div 
+          className="text-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading skills...</p>
+        </motion.div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
-        {error}
-        <button 
-          onClick={() => setError(null)}
-          className="float-right text-red-800 hover:text-red-900"
-        >
-          ×
-        </button>
-      </div>
+      <motion.div 
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-red-700 mb-2">Error Loading Skills</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <motion.button
+            onClick={fetchSkills}
+            className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Try Again
+          </motion.button>
+        </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold text-green-800">Agricultural Skills & Training</h1>
-        <p className="text-lg text-gray-600 mt-2">Discover comprehensive training materials and video tutorials to enhance your farming expertise</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+            <FiBook className="text-green-600" />
+            Skills Development
+          </h1>
+          <p className="text-lg text-gray-600 mt-2">Discover comprehensive training materials and video tutorials to enhance your farming expertise</p>
+        </motion.div>
 
-      <div className="flex flex-col md:flex-row gap-6 mb-8">
-        <div className="w-full md:w-1/4 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-          <h2 className="text-xl font-semibold mb-4 text-green-700">Filters</h2>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Search Skills</label>
-            <input
-              type="text"
-              placeholder="Search skills..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-            />
-          </div>
+        <motion.div 
+          className="flex flex-col md:flex-row gap-6 mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <motion.div 
+            className="w-full md:w-1/4 bg-white p-6 rounded-lg shadow-lg border border-gray-100"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h2 className="text-xl font-semibold mb-4 text-green-700 flex items-center gap-2">
+              <FiFilter />
+              Filters
+            </h2>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search Skills</label>
+              <motion.div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <motion.input
+                  type="text"
+                  placeholder="Search skills..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition-all"
+                  whileFocus={{ scale: 1.02 }}
+                />
+              </motion.div>
+            </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>{category.icon} {category.name}</option>
-              ))}
-            </select>
-          </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              <motion.select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition-all"
+                whileFocus={{ scale: 1.02 }}
+              >
+                <option value="all">All Categories</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.icon} {category.name}</option>
+                ))}
+              </motion.select>
+            </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
-            <select
-              value={difficultyFilter}
-              onChange={(e) => setDifficultyFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="all">All Difficulties</option>
-              {difficulties.map(diff => (
-                <option key={diff.value} value={diff.value}>{diff.label}</option>
-              ))}
-            </select>
-          </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+              <motion.select
+                value={difficultyFilter}
+                onChange={(e) => setDifficultyFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition-all"
+                whileFocus={{ scale: 1.02 }}
+              >
+                <option value="all">All Difficulties</option>
+                {difficulties.map(diff => (
+                  <option key={diff.value} value={diff.value}>{diff.label}</option>
+                ))}
+              </motion.select>
+            </div>
 
-          <div className="mt-6">
-            <h3 className="font-medium text-gray-700 mb-2">Your Progress</h3>
-            <div className="bg-green-50 p-3 rounded-md">
-              <p className="text-sm">
-                Completed: <span className="font-semibold">{completedSkills.length}</span> of <span className="font-semibold">{skills.length}</span> skills
-              </p>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-                <div 
-                  className="bg-green-600 h-2.5 rounded-full" 
-                  style={{ width: `${(completedSkills.length / skills.length) * 100}%` }}
-                ></div>
+            <div className="mt-6">
+              <h3 className="font-medium text-gray-700 mb-2">Your Progress</h3>
+              <div className="bg-green-50 p-3 rounded-md">
+                <p className="text-green-700 text-sm">
+                  {completedSkills.length} of {filteredSkills.length} skills completed
+                </p>
+                <div className="w-full bg-green-200 rounded-full h-2 mt-2">
+                  <motion.div 
+                    className="bg-green-600 h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${filteredSkills.length > 0 ? (completedSkills.length / filteredSkills.length) * 100 : 0}%` }}
+                    transition={{ duration: 0.5 }}
+                  ></motion.div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
 
-        <div className="w-full md:w-3/4">
-          {filteredSkills.length === 0 ? (
-            <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No skills found</h3>
-              <p className="mt-1 text-sm text-gray-500">Try adjusting your search or filter criteria</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredSkills.map(skill => {
-                const isExpanded = expandedSkillIds.includes(skill.id);
-                const isCompleted = completedSkills.includes(skill.id);
-                const category = categories.find(c => c.id === skill.category_id) || { name: 'Unknown', icon: '❓' };
-                const difficultyStyle = difficultyStyles[skill.difficulty] || { color: 'gray', icon: '📚' };
-                
-                return (
-                  <div
-                    key={skill.id}
-                    className={`bg-white rounded-xl shadow-sm p-6 border transition-all duration-300 ${isExpanded ? 'border-green-300' : 'border-gray-100'} hover:shadow-md`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{skill.title}</h3>
-                        <span className="inline-block px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full mt-1">
-                          {category.icon} {category.name}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => markSkillCompleted(skill.id)}
-                        className={`p-1 rounded-full ${isCompleted ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-green-600'}`}
-                        title={isCompleted ? "Mark as incomplete" : "Mark as completed"}
+          <div className="flex-1">
+            <AnimatePresence>
+              {filteredSkills.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="text-center py-12"
+                >
+                  <div className="text-gray-400 text-6xl mb-4">📚</div>
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">No Skills Found</h3>
+                  <p className="text-gray-500">Try adjusting your filters or search terms.</p>
+                </motion.div>
+              ) : (
+                <motion.div className="space-y-6">
+                  {filteredSkills.map((skill, index) => {
+                    const isExpanded = expandedSkillIds.includes(skill.id);
+                    const isCompleted = completedSkills.includes(skill.id);
+                    const diffStyle = difficultyStyles[skill.difficulty] || difficultyStyles.beginner;
+
+                    return (
+                      <motion.div
+                        key={skill.id}
+                        className="bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                        whileHover={{ scale: 1.02 }}
                       >
-                        {isCompleted ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
+                        <div className="p-6">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-xl font-semibold text-gray-900">{skill.title}</h3>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${diffStyle.color}-100 text-${diffStyle.color}-700`}>
+                                  {diffStyle.icon} {skill.difficulty}
+                                </span>
+                                {isCompleted && (
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="text-green-500"
+                                  >
+                                    <FiCheckCircle className="w-5 h-5" />
+                                  </motion.div>
+                                )}
+                              </div>
+                              <p className="text-gray-600 mb-4">{skill.description}</p>
+                              
+                              <div className="flex items-center gap-4 mb-4">
+                                {skill.category_id && (
+                                  <span className="text-sm text-gray-500">
+                                    {categories.find(c => c.id === skill.category_id)?.icon} {categories.find(c => c.id === skill.category_id)?.name}
+                                  </span>
+                                )}
+                                {skill.duration && (
+                                  <span className="text-sm text-gray-500 flex items-center gap-1">
+                                    <FiClock className="w-4 h-4" />
+                                    {formatDuration(skill.duration)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
 
-                    <div className="flex items-center text-sm text-gray-500 mb-4">
-                      <span className="flex items-center mr-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {skill.estimated_time || 'Not specified'}
-                      </span>
-                      <span className="flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${difficultyStyle.color}-100 text-${difficultyStyle.color}-800`}>
-                          {difficultyStyle.icon} {skill.difficulty}
-                        </span>
-                      </span>
-                    </div>
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="mt-4 border-t border-gray-100 pt-4"
+                              >
+                                {skill.content && (
+                                  <motion.div 
+                                    className="mb-4"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4 }}
+                                  >
+                                    <h4 className="font-medium text-gray-900 mb-2">Learning Content:</h4>
+                                    <div className="prose prose-sm max-w-none text-gray-700">
+                                      {skill.content}
+                                    </div>
+                                  </motion.div>
+                                )}
 
-                    <p className="text-gray-600 mb-4">
-                      {isExpanded ? skill.content || skill.description : skill.description}
-                    </p>
+                                {skill.videos && skill.videos.length > 0 && (
+                                  <motion.div 
+                                    className="mt-4"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4 }}
+                                  >
+                                    <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                                      <FiVideo className="text-red-500" />
+                                      Instructional Videos:
+                                    </h4>
+                                    <div className="space-y-4">
+                                      {skill.videos.map((video, videoIndex) => (
+                                        <motion.div 
+                                          key={video.id} 
+                                          className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                                          initial={{ opacity: 0, x: -20 }}
+                                          animate={{ opacity: 1, x: 0 }}
+                                          transition={{ duration: 0.3, delay: videoIndex * 0.1 }}
+                                        >
+                                          <h5 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                            <FiPlay className="text-green-500" />
+                                            {video.title}
+                                          </h5>
+                                          {video.description && <p className="text-sm text-gray-600 mb-3">{video.description}</p>}
+                                          <div className="aspect-w-16 aspect-h-9 relative">
+                                            {isEmbeddableUrl(video.video_url) ? (
+                                              <iframe 
+                                                className="w-full h-48 rounded-md"
+                                                src={formatVideoUrl(video.video_url)}
+                                                title={video.title}
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" 
+                                                allowFullScreen
+                                                onError={(e) => {
+                                                  console.error('❌ Video iframe failed to load:', video.video_url);
+                                                  e.target.style.display = 'none';
+                                                  // Show error fallback
+                                                  const fallback = e.target.nextSibling;
+                                                  if (fallback) fallback.style.display = 'flex';
+                                                }}
+                                              />
+                                            ) : (
+                                              <video 
+                                                className="w-full h-48 rounded-md object-cover"
+                                                controls
+                                                preload="metadata"
+                                                poster={video.thumbnail_url}
+                                                onError={(e) => {
+                                                  console.error('❌ Video failed to load:', video.video_url);
+                                                  e.target.style.display = 'none';
+                                                  // Show error fallback
+                                                  const fallback = e.target.nextSibling;
+                                                  if (fallback) fallback.style.display = 'flex';
+                                                }}
+                                              >
+                                                <source src={formatVideoUrl(video.video_url)} type="video/mp4" />
+                                                <source src={formatVideoUrl(video.video_url)} type="video/webm" />
+                                                <source src={formatVideoUrl(video.video_url)} type="video/mov" />
+                                                <source src={formatVideoUrl(video.video_url)} type="video/avi" />
+                                                Your browser does not support the video tag.
+                                              </video>
+                                            )}
+                                            
+                                            {/* Error fallback */}
+                                            <div 
+                                              className="hidden absolute inset-0 items-center justify-center bg-gray-100 text-gray-500 rounded-md"
+                                              style={{display: 'none'}}
+                                            >
+                                              <div className="text-center">
+                                                <FiVideo className="w-8 h-8 mx-auto mb-2" />
+                                                <p className="text-sm">Video failed to load</p>
+                                                <p className="text-xs mt-1">{video.video_url}</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center justify-between mt-2">
+                                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                                              <FiClock className="w-3 h-3" />
+                                              Duration: {formatDuration(video.duration)}
+                                            </p>
+                                            <motion.button
+                                              onClick={() => openVideoPlayer(video, skill.title)}
+                                              className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full hover:bg-green-200 transition-colors"
+                                              whileHover={{ scale: 1.05 }}
+                                              whileTap={{ scale: 0.95 }}
+                                            >
+                                              <FiEye className="w-3 h-3 inline mr-1" />
+                                              Watch Full Screen
+                                            </motion.button>
+                                          </div>
+                                        </motion.div>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
 
-                    {isExpanded && (
-                      <div className="mt-4 space-y-4">
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2">Detailed Instructions:</h4>
-                          <div className="text-gray-700 whitespace-pre-line">
-                            {skill.content || skill.description}
+                          <div className="mt-4 flex items-center justify-between">
+                            <motion.button
+                              onClick={() => toggleExpand(skill.id)}
+                              className="text-green-600 hover:text-green-700 font-medium transition-colors"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              {isExpanded ? 'Show Less' : 'Learn More'}
+                            </motion.button>
+
+                            <motion.button
+                              onClick={() => markSkillCompleted(skill.id)}
+                              className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                                isCompleted 
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              {isCompleted ? (
+                                <>
+                                  <FiCheckCircle className="w-4 h-4 inline mr-1" />
+                                  Completed
+                                </>
+                              ) : (
+                                'Mark Complete'
+                              )}
+                            </motion.button>
                           </div>
                         </div>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
 
-                        {skill.tools_required && (
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Required Tools:</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {skill.tools_required.split(',').map((tool, index) => (
-                                <span key={index} className="bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700">
-                                  {tool.trim()}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {skill.materials_required && (
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Required Materials:</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {skill.materials_required.split(',').map((material, index) => (
-                                <span key={index} className="bg-blue-100 px-3 py-1 rounded-full text-sm text-blue-700">
-                                  {material.trim()}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {skill.videos && skill.videos.length > 0 && (
-                          <div className="mt-4">
-                            <h4 className="font-medium text-gray-900 mb-2">Instructional Videos:</h4>
-                            <div className="space-y-4">
-                              {skill.videos.map(video => (
-                                <div key={video.id} className="bg-gray-50 rounded-lg p-4">
-                                  <h5 className="font-semibold text-gray-800 mb-2">{video.title}</h5>
-                                  {video.description && <p className="text-sm text-gray-600 mb-3">{video.description}</p>}
-                                  <div className="aspect-w-16 aspect-h-9">
-                                    <iframe 
-                                      className="w-full h-48 rounded-md"
-                                      src={video.video_url}
-                                      title={video.title}
-                                      frameBorder="0"
-                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                      allowFullScreen>
-                                    </iframe>
-                                  </div>
-                                  <p className="text-xs text-gray-500 mt-2">Duration: {formatDuration(video.duration)}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="mt-4 flex items-center justify-between">
-                      <button
-                        onClick={() => toggleExpand(skill.id)}
-                        className="text-green-600 hover:text-green-800 font-medium flex items-center"
-                      >
-                        {isExpanded ? (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                            </svg>
-                            Show Less
-                          </>
-                        ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                            View Full Guide
-                          </>
-                        )}
-                      </button>
-                      
-                      <button
-                        onClick={() => markSkillCompleted(skill.id)}
-                        className={`px-3 py-1 rounded-md text-sm font-medium ${isCompleted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-green-50 hover:text-green-700'}`}
-                      >
-                        {isCompleted ? 'Completed ✓' : 'Mark Complete'}
-                      </button>
+        {/* Video Player Modal */}
+        <AnimatePresence>
+          {selectedVideo && (
+            <motion.div 
+              className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-gray-800">{selectedVideo.title}</h3>
+                      <p className="text-gray-600">Skill: {selectedVideo.skillTitle}</p>
                     </div>
+                    <button 
+                      onClick={closeVideoPlayer}
+                      className="text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      <FiEye className="w-6 h-6" />
+                    </button>
                   </div>
-                )
-              })}
-            </div>
+                  
+                  <div className="bg-black rounded-lg overflow-hidden mb-4">
+                    {isEmbeddableUrl(selectedVideo.video_url) ? (
+                      <iframe 
+                        className="w-full h-96"
+                        src={formatVideoUrl(selectedVideo.video_url)}
+                        title={selectedVideo.title}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" 
+                        allowFullScreen
+                      />
+                    ) : (
+                      <video 
+                        className="w-full h-96"
+                        controls
+                        autoPlay
+                        poster={selectedVideo.thumbnail_url}
+                      >
+                        <source src={formatVideoUrl(selectedVideo.video_url)} type="video/mp4" />
+                        <source src={formatVideoUrl(selectedVideo.video_url)} type="video/webm" />
+                        <source src={formatVideoUrl(selectedVideo.video_url)} type="video/mov" />
+                        <source src={formatVideoUrl(selectedVideo.video_url)} type="video/avi" />
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                  </div>
+                  
+                  {selectedVideo.description && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-800 mb-2">Description</h4>
+                      <p className="text-gray-600">{selectedVideo.description}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
     </div>
   );

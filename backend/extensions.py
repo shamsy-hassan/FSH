@@ -9,7 +9,7 @@ mail = Mail()
 
 # Simple upload configurations (replacing Flask-Uploads)
 UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'webm', 'mkv'}
 
 def allowed_file(filename):
     return '.' in filename and \

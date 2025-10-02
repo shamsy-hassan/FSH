@@ -1,5 +1,6 @@
 // ManageStore.jsx
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
 
 export default function ManageStore() {
@@ -66,6 +67,21 @@ export default function ManageStore() {
     } catch (err) {
       setError('Failed to fetch storage requests');
       console.error('Error fetching storage requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllStorageRequests = async () => {
+    try {
+      setLoading(true);
+      const data = await agriConnectAPI.storage.getStorageRequests(); // No warehouseId = all requests
+      setStorageRequests(data.requests || []);
+      setSelectedWarehouse(null); // No specific warehouse selected
+      setShowRequests(true);
+    } catch (err) {
+      setError('Failed to fetch all storage requests');
+      console.error('Error fetching all storage requests:', err);
     } finally {
       setLoading(false);
     }
@@ -224,13 +240,20 @@ export default function ManageStore() {
               </svg>
               Back to Warehouses
             </button>
-            <h2 className="text-2xl font-bold">Storage Requests</h2>
+            <h2 className="text-2xl font-bold">
+              {selectedWarehouse ? 'Storage Requests for Warehouse' : 'All Storage Requests'}
+            </h2>
           </div>
           
           {storageRequests.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded">
-              <p>No storage requests found for this warehouse.</p>
-              <p className="text-sm text-gray-500 mt-1">This warehouse doesn't have any pending storage requests yet.</p>
+              <p>No storage requests found{selectedWarehouse ? ' for this warehouse' : ''}.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedWarehouse 
+                  ? "This warehouse doesn't have any pending storage requests yet."
+                  : "No storage requests have been submitted to any warehouse yet."
+                }
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -238,6 +261,7 @@ export default function ManageStore() {
                 <thead className="bg-green-600 text-white">
                   <tr>
                     <th className="py-2 px-4 text-left">Farmer</th>
+                    {!selectedWarehouse && <th className="py-2 px-4 text-left">Warehouse</th>}
                     <th className="py-2 px-4 text-left">Product</th>
                     <th className="py-2 px-4 text-left">Quantity</th>
                     <th className="py-2 px-4 text-left">Duration</th>
@@ -253,6 +277,12 @@ export default function ManageStore() {
                         <p className="font-medium">Farmer #{request.farmerId}</p>
                         <p className="text-sm text-gray-600">{request.createdAt && new Date(request.createdAt).toLocaleDateString()}</p>
                       </td>
+                      {!selectedWarehouse && (
+                        <td className="py-3 px-4">
+                          <p className="font-medium">{request.warehouse_name || 'Unknown Warehouse'}</p>
+                          <p className="text-sm text-gray-600">ID: {request.warehouse_id}</p>
+                        </td>
+                      )}
                       <td className="py-3 px-4">{request.product_type}</td>
                       <td className="py-3 px-4">{request.quantity} tons</td>
                       <td className="py-3 px-4">{request.duration} days</td>
@@ -309,6 +339,12 @@ export default function ManageStore() {
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm"
                 >
                   Refresh
+                </button>
+                <button 
+                  onClick={fetchAllStorageRequests}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  View All Requests
                 </button>
                 <button 
                   onClick={() => setShowWarehouseForm(true)}

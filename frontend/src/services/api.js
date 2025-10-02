@@ -89,12 +89,24 @@ async handleResponse(response) {
             return await this.auth.login(username, password, 'admin');
         },
 
-        // Get user profile
-        getProfile: async () => {
-            const response = await fetch(`${API_BASE_URL}/auth/profile`, {
-                method: 'GET',
+                // Get user profile\n        getProfile: async () => {\n            const response = await fetch(`${API_BASE_URL}/auth/profile`, {\n                method: 'GET',\n                headers: this.getHeaders(),\n            });\n\n            return await this.handleResponse(response);\n        },\n\n        // Logout user\n        logout: async () => {\n            const response = await fetch(`${API_BASE_URL}/auth/logout`, {\n                method: 'POST',\n                headers: this.getHeaders(),\n            });\n\n            // Clear local storage\n            localStorage.removeItem('agriConnectToken');\n            localStorage.removeItem('agriConnectUserType');\n            localStorage.removeItem('agriConnectUserId');\n            \n            // Reset instance variables\n            this.token = null;\n            this.userType = null;\n            this.userId = null;\n\n            return await this.handleResponse(response);\n        },
+
+        // Logout user
+        logout: async () => {
+            const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+                method: 'POST',
                 headers: this.getHeaders(),
             });
+
+            // Clear local storage
+            localStorage.removeItem('agriConnectToken');
+            localStorage.removeItem('agriConnectUserType');
+            localStorage.removeItem('agriConnectUserId');
+            
+            // Reset instance variables
+            this.token = null;
+            this.userType = null;
+            this.userId = null;
 
             return await this.handleResponse(response);
         },
@@ -137,25 +149,57 @@ async handleResponse(response) {
 
         // Update user profile
         updateProfile: async (profileData) => {
-            const formData = new FormData();
-            
-            // Append all profile data to formData
-            Object.keys(profileData).forEach(key => {
-                if (key === 'profile_picture' && profileData[key] instanceof File) {
-                    formData.append(key, profileData[key]);
-                } else {
-                    formData.append(key, profileData[key]);
-                }
-            });
+            // Convert to FormData if file uploads are involved
+            let body, headers;
+            if (profileData instanceof FormData) {
+                body = profileData;
+                headers = {
+                    'Authorization': `Bearer ${this.token}`,
+                };
+            } else {
+                body = JSON.stringify(profileData);
+                headers = this.getHeaders();
+            }
 
-            const response = await fetch(`${API_BASE_URL}/user/profile`, {
+            const response = await fetch(`${API_BASE_URL}/profile`, {
                 method: 'PUT',
+                headers: headers,
+                body: body,
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Upload profile picture
+        uploadProfilePicture: async (file) => {
+            const formData = new FormData();
+            formData.append('picture', file);
+
+            const response = await fetch(`${API_BASE_URL}/profile/picture`, {
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.token}`,
                 },
                 body: formData,
             });
+            return await this.handleResponse(response);
+        },
 
+        // Delete profile picture
+        deleteProfilePicture: async () => {
+            const response = await fetch(`${API_BASE_URL}/profile/picture`, {
+                method: 'DELETE',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Create user profile
+        createProfile: async (profileData) => {
+            const response = await fetch(`${API_BASE_URL}/profile`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(profileData),
+            });
             return await this.handleResponse(response);
         },
 
@@ -202,6 +246,43 @@ async handleResponse(response) {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({ is_active: isActive }),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Search users
+        searchUsers: async (query = '', limit = 20, showAll = false) => {
+            let url = `${API_BASE_URL}/user/search?limit=${limit}`;
+            if (showAll) {
+                url += '&all=true';
+            } else if (query) {
+                url += `&q=${encodeURIComponent(query)}`;
+            }
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+    };
+
+    // User API calls
+    user = {
+        // Search users
+        searchUsers: async (query = '', limit = 20, showAll = false) => {
+            let url = `${API_BASE_URL}/user/search?limit=${limit}`;
+            if (showAll) {
+                url += '&all=true';
+            } else if (query) {
+                url += `&q=${encodeURIComponent(query)}`;
+            }
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
             });
 
             return await this.handleResponse(response);
@@ -275,6 +356,18 @@ async handleResponse(response) {
         const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items/${itemId}`, {
             method: 'DELETE',
             headers: this.getHeaders(), // Use class method instead of getToken()
+        });
+        
+        return await this.handleResponse(response);
+    },
+    
+    updateCartItem: async (itemId, quantity) => {
+        const response = await fetch(`${API_BASE_URL}/ecommerce/cart/items/${itemId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+                quantity: quantity
+            })
         });
         
         return await this.handleResponse(response);
@@ -417,10 +510,15 @@ async handleResponse(response) {
 
     // Order API calls
     order = {
-        getOrders: async (status = null, page = 1, perPage = 20) => {
-            let url = `${API_BASE_URL}/order/orders?page=${page}&per_page=${perPage}`;
+        getOrders: async (params = {}) => {
+            const { status, page = 1, limit = 20, search } = params;
+            let url = `${API_BASE_URL}/order/orders?page=${page}&per_page=${limit}`;
+            
             if (status && status !== 'all') {
                 url += `&status=${status}`;
+            }
+            if (search) {
+                url += `&search=${encodeURIComponent(search)}`;
             }
 
             const response = await fetch(url, {
@@ -428,6 +526,11 @@ async handleResponse(response) {
                 headers: this.getHeaders(),
             });
             return await this.handleResponse(response);
+        },
+
+        // Get user's own orders (same endpoint, but backend filters by user)
+        getUserOrders: async (params = {}) => {
+            return await this.order.getOrders(params);
         },
 
         getOrder: async (orderId) => {
@@ -481,14 +584,14 @@ async handleResponse(response) {
     // Market API calls
     market = {
         // Get market posts with optional filtering
-        getPosts: async (category = null, region = null, page = 1, perPage = 20) => {
+        getPosts: async (category = null, region = null, type = null, status = null, userType = null, approvedOnly = false, page = 1, perPage = 20) => {
             let url = `${API_BASE_URL}/market/posts?page=${page}&per_page=${perPage}`;
-            if (category) {
-                url += `&category=${category}`;
-            }
-            if (region) {
-                url += `&region=${region}`;
-            }
+            if (category) url += `&category=${category}`;
+            if (region) url += `&region=${region}`;
+            if (type) url += `&type=${type}`;
+            if (status) url += `&status=${status}`;
+            if (userType) url += `&user_type=${userType}`;
+            if (approvedOnly) url += `&approved_only=true`;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -514,7 +617,9 @@ async handleResponse(response) {
             
             // Append post data
             Object.keys(postData).forEach(key => {
-                formData.append(key, postData[key]);
+                if (postData[key] !== null && postData[key] !== undefined) {
+                    formData.append(key, postData[key]);
+                }
             });
             
             // Append images
@@ -553,24 +658,105 @@ async handleResponse(response) {
 
             return await this.handleResponse(response);
         },
+
+        // Approve market post
+        approvePost: async (postId) => {
+            const response = await fetch(`${API_BASE_URL}/market/posts/${postId}/approve`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Express interest in a post
+        expressInterest: async (postId, interestData) => {
+            const response = await fetch(`${API_BASE_URL}/market/posts/${postId}/interest`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(interestData),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Get interests for a post
+        getPostInterests: async (postId) => {
+            const response = await fetch(`${API_BASE_URL}/market/posts/${postId}/interests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Accept an interest
+        acceptInterest: async (interestId) => {
+            const response = await fetch(`${API_BASE_URL}/market/interests/${interestId}/accept`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Get market statistics
+        getStats: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/stats`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Legacy compatibility methods
+        getNeeds: async () => {
+            return await agriConnectAPI.market.getPosts(null, null, 'need');
+        },
+
+        getDeals: async () => {
+            const userId = agriConnectAPI.getUserId();
+            return await agriConnectAPI.market.getPosts(null, null, 'need', 'closed');
+        },
+
+        createNeed: async (needData) => {
+            const postData = { ...needData, type: 'need' };
+            return await agriConnectAPI.market.createPost(postData, []);
+        },
+
+        deleteNeed: async (needId) => {
+            return await agriConnectAPI.market.deletePost(needId);
+        },
+
+        updateNeed: async (needId, needData) => {
+            return await agriConnectAPI.market.updatePost(needId, needData);
+        },
+
+        rejectPost: async (postId) => {
+            return await agriConnectAPI.market.updatePost(postId, { status: 'rejected' });
+        },
+
+        requestPurchase: async (postId, message = '') => {
+            return await agriConnectAPI.market.expressInterest(postId, { message });
+        },
+
+        updateDeal: async (dealId, dealData) => {
+            return await agriConnectAPI.market.updatePost(dealId, dealData);
+        },
+
+        acceptNeed: async (needId, userId) => {
+            return await agriConnectAPI.market.updatePost(needId, { accepted_by: userId, status: 'closed' });
+        },
     };
 
     // SACCO API calls
 sacco = {
-    // Get all SACCOS with optional region filtering
-    getSaccos: async (params = null, page = 1, perPage = 20) => {
+        // Get all SACCOS with optional region filtering
+    getSaccos: async (region = null, page = 1, perPage = 20) => {
         let url = `${API_BASE_URL}/sacco/saccos?page=${page}&per_page=${perPage}`;
-        
-        // Handle both string region parameter (admin) and object parameter (user)
-        if (typeof params === 'string' && params) {
-            url += `&region=${params}`;
-        } else if (typeof params === 'object' && params) {
-            if (params.region) {
-                url += `&region=${params.region}`;
-            }
-            if (params.search) {
-                url += `&search=${params.search}`;
-            }
+        if (region) {
+            url += `&region=${region}`;
         }
 
         const response = await fetch(url, {
@@ -585,6 +771,50 @@ sacco = {
     getSacco: async (saccoId) => {
         const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
             method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Create SACCO (admin only)
+    createSacco: async (saccoData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(saccoData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Update SACCO (admin only)
+    updateSacco: async (saccoId, saccoData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(saccoData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Delete SACCO (admin only)
+    deleteSacco: async (saccoId) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
+            method: 'DELETE',
             headers: this.getHeaders(),
         });
 
@@ -697,6 +927,52 @@ sacco = {
         });
 
         return await this.handleResponse(response);
+    },
+
+    // Process member deposit (admin only)
+    processDeposit: async (memberId, depositData) => {
+        console.log('API: processDeposit called with:', { memberId, depositData });
+        console.log('API: Current token:', this.token ? 'Present' : 'Missing');
+        
+        const response = await fetch(`${API_BASE_URL}/sacco/members/${memberId}/deposit`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(depositData),
+        });
+
+        console.log('API: Response status:', response.status);
+        console.log('API: Response headers:', Object.fromEntries(response.headers.entries()));
+        
+        const result = await this.handleResponse(response);
+        console.log('API: Response data:', result);
+        return result;
+    },
+
+    // Get SACCO members (admin only)
+    getSaccoMembers: async (saccoId) => {
+        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}/members`, {
+            method: 'GET',
+            headers: agriConnectAPI.getHeaders(),
+        });
+
+        return await agriConnectAPI.handleResponse(response);
+    },
+
+    // Process savings transaction (user)
+    processSavingsTransaction: async (transactionData) => {
+        console.log('API: processSavingsTransaction called with:', transactionData);
+        console.log('API: Current token:', agriConnectAPI.token ? 'Present' : 'Missing');
+        
+        const response = await fetch(`${API_BASE_URL}/sacco/savings/transaction`, {
+            method: 'POST',
+            headers: agriConnectAPI.getHeaders(),
+            body: JSON.stringify(transactionData),
+        });
+
+        console.log('API: Response status:', response.status);
+        const result = await agriConnectAPI.handleResponse(response);
+        console.log('API: Response data:', result);
+        return result;
     },
 };
 
@@ -909,10 +1185,16 @@ agroclimate = {
 
         // Add skill video (admin only)
         addSkillVideo: async (videoData) => {
+            // If videoData is FormData (file upload), don't set Content-Type header
+            const isFormData = videoData instanceof FormData;
+            const headers = isFormData 
+                ? { 'Authorization': `Bearer ${this.token}` } 
+                : this.getHeaders();
+            
             const response = await fetch(`${API_BASE_URL}/skill/videos`, {
                 method: 'POST',
-                headers: this.getHeaders(),
-                body: JSON.stringify(videoData),
+                headers: headers,
+                body: isFormData ? videoData : JSON.stringify(videoData),
             });
 
             return await this.handleResponse(response);
@@ -929,9 +1211,63 @@ agroclimate = {
         return await this.handleResponse(response);
     },
 
-    // Delete skill (admin only) - MISSING METHOD
+    // Delete skill (admin only)
     deleteSkill: async (skillId) => {
         const response = await fetch(`${API_BASE_URL}/skill/skills/${skillId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Get skill categories
+    getSkillCategories: async () => {
+        const response = await fetch(`${API_BASE_URL}/skill/categories`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Create skill category (admin only)
+    createSkillCategory: async (categoryData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/skill/categories`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(categoryData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Update skill category (admin only)
+    updateSkillCategory: async (categoryId, categoryData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/skill/categories/${categoryId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(categoryData),
+        });
+
+        return await this.handleResponse(response);
+    },
+
+    // Delete skill category (admin only)
+    deleteSkillCategory: async (categoryId) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/skill/categories/${categoryId}`, {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
@@ -1132,6 +1468,72 @@ storage = {
             return false;
         }
     }
+
+    // Notifications API calls (placeholder)
+    notifications = {
+        // Notify farmers about new market needs
+        notifyFarmers: async (type, data) => {
+            // TODO: Implement notifications endpoint in backend
+            console.log(`Notification to farmers: ${type}`, data);
+            // For now, just return success - this would normally send notifications
+            return { success: true, message: 'Farmers notified' };
+        },
+
+        // Notify admins about need acceptance
+        notifyAdmins: async (type, data) => {
+            // TODO: Implement notifications endpoint in backend
+            console.log(`Notification to admins: ${type}`, data);
+            // For now, just return success - this would normally send notifications
+            return { success: true, message: 'Admins notified' };
+        },
+
+        // Notify specific user
+        notifyUser: async (userId, type, data) => {
+            // TODO: Implement notifications endpoint in backend
+            console.log(`Notification to user ${userId}: ${type}`, data);
+            // For now, just return success - this would normally send notifications
+            return { success: true, message: 'User notified' };
+        }
+    };
+
+    // Dashboard API methods
+    dashboard = {
+        getUserDashboard: async () => {
+            const response = await fetch(`${API_BASE_URL}/dashboard/user/overview`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        getAdminDashboard: async () => {
+            if (!this.isAdmin()) {
+                throw new Error('Admin access required');
+            }
+
+            const response = await fetch(`${API_BASE_URL}/dashboard/admin/overview`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        getPolicies: async () => {
+            const response = await fetch(`${API_BASE_URL}/dashboard/policies`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        getFeatures: async () => {
+            const response = await fetch(`${API_BASE_URL}/dashboard/features`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        }
+    };
 }
 
 // Create a singleton instance

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { agriConnectAPI } from "../../services/api";
 import { motion } from "framer-motion";
 
 const UserLogin = () => {
@@ -18,18 +19,20 @@ const UserLogin = () => {
     setError(null);
 
     try {
-      const response = await login(username, password);
+      // Send user_type to backend for better validation
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password, user_type: 'user' }),
+      });
 
-      if (response.success) {
-        // DEVELOPMENT MODE: Skip email verification check
-        // if (!response.user.is_verified) {
-        //   setError("Please verify your email before logging in");
-        //   setLoading(false);
-        //   return;
-        // }
+      const data = await response.json();
 
+      if (data.success && data.type === 'user') {
         // Check if user is active
-        if (!response.user.is_active) {
+        if (!data.user.is_active) {
           setError(
             "Your account has been deactivated. Please contact support.",
           );
@@ -37,15 +40,20 @@ const UserLogin = () => {
           return;
         }
 
-        // Redirect based on user role
-        if (response.user.user_type === "admin") {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/user/dashboard");
-        }
+        // Store user data in localStorage
+        localStorage.setItem('agriConnectToken', data.access_token);
+        localStorage.setItem('agriConnectUser', JSON.stringify(data.user));
+        localStorage.setItem('agriConnectUserType', 'user');
+        localStorage.setItem('agriConnectUserId', data.user.id);
+
+        // Update API instance
+        agriConnectAPI.token = data.access_token;
+        
+        // Force page reload to reinitialize AuthContext with new data
+        window.location.href = '/user/dashboard';
       } else {
         setError(
-          response.error || "Login failed. Please check your credentials.",
+          data.error || "Login failed. Please check your credentials.",
         );
       }
     } catch (err) {

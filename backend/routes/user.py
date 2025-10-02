@@ -79,3 +79,48 @@ def change_password():
     db.session.commit()
     
     return jsonify({'message': 'Password changed successfully'})
+
+@user_bp.route('/search', methods=['GET'])
+@jwt_required()
+def search_users():
+    import json
+    identity = json.loads(get_jwt_identity())
+    
+    query = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 20)), 50)  # Max 50 results
+    show_all = request.args.get('all', 'false').lower() == 'true'
+    
+    # Get current user ID to exclude from results
+    current_user_id = identity['id']
+    
+    if show_all or not query:
+        # Get all active users (for user list in messaging)
+        users = User.query.filter(
+            User.id != current_user_id,  # Exclude current user
+            User.is_active == True       # Only active users
+        ).limit(limit).all()
+    else:
+        # Search users by username or email (partial match)
+        if len(query) < 2:
+            return jsonify({'users': []})
+            
+        users = User.query.filter(
+            User.id != current_user_id,  # Exclude current user
+            User.is_active == True,      # Only active users
+            db.or_(
+                User.username.ilike(f'%{query}%'),
+                User.email.ilike(f'%{query}%')
+            )
+        ).limit(limit).all()
+    
+    user_list = []
+    for user in users:
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'user_type': user.user_type,
+            'avatar': f'👨‍🌾' if user.user_type == 'farmer' else f'👨‍💼'
+        }
+        user_list.append(user_data)
+    
+    return jsonify({'users': user_list})

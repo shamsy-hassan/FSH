@@ -137,20 +137,40 @@ def create_storage_request():
     
     # Calculate cost based on rates
     rates = json.loads(warehouse.rates) if warehouse.rates else {}
-    daily_rate = Decimal(rates.get(data['product_type'], 0))
-    total_cost = daily_rate * Decimal(data['quantity']) * data['duration']
+    daily_rate_str = rates.get(data['product_type'], '0')
+    
+    # Convert string rate to Decimal, handling both string and number types
+    try:
+        daily_rate = Decimal(str(daily_rate_str))
+    except (ValueError, TypeError):
+        daily_rate = Decimal('0')
+    
+    # Ensure duration is also converted to Decimal for consistent calculation
+    try:
+        duration = Decimal(str(data['duration']))
+        quantity = Decimal(str(data['quantity']))
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid quantity or duration format'}), 400
+    
+    total_cost = daily_rate * quantity * duration
     
     # Create storage request
+    try:
+        start_date = datetime.datetime.strptime(data['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(data['end_date'], '%Y-%m-%d').date()
+    except (ValueError, KeyError):
+        return jsonify({'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    
     storage_request = StorageRequest(
         user_id=user_id,
         warehouse_id=data['warehouse_id'],
         product_type=data['product_type'],
-        quantity=data['quantity'],
-        duration=data['duration'],
-        start_date=datetime.datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
-        end_date=datetime.datetime.strptime(data['end_date'], '%Y-%m-%d').date(),
+        quantity=float(quantity),  # Convert back to float for storage
+        duration=int(duration),    # Convert to int for storage
+        start_date=start_date,
+        end_date=end_date,
         special_requirements=data.get('special_requirements', ''),
-        total_cost=total_cost
+        total_cost=float(total_cost)  # Convert back to float for storage
     )
     
     db.session.add(storage_request)

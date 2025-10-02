@@ -1,5 +1,6 @@
 // Sacco.jsx
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
 
 function Sacco() {
@@ -13,6 +14,7 @@ function Sacco() {
   const [selectedRegion, setSelectedRegion] = useState('');
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [showLoanForm, setShowLoanForm] = useState(false);
+  const [showSavingsForm, setShowSavingsForm] = useState(false);
   const [selectedSacco, setSelectedSacco] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [statusFilter, setStatusFilter] = useState("all");
@@ -33,6 +35,13 @@ function Sacco() {
     email: '',
     id_number: '',
     initial_deposit: ''
+  });
+
+  const [savingsForm, setSavingsForm] = useState({
+    sacco_id: '',
+    amount: '',
+    transaction_type: 'deposit', // deposit or withdrawal
+    description: ''
   });
 
   const regions = ['North', 'South', 'East', 'West', 'Central'];
@@ -110,6 +119,30 @@ function Sacco() {
     }
   };
 
+  // NEW: Handle savings transactions
+  const handleSavingsTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      await agriConnectAPI.sacco.processSavingsTransaction(savingsForm);
+      setSuccess(`Savings ${savingsForm.transaction_type} processed successfully!`);
+      setShowSavingsForm(false);
+      setSavingsForm({
+        sacco_id: '',
+        amount: '',
+        transaction_type: 'deposit',
+        description: ''
+      });
+      fetchMyData(); // Refresh memberships to update savings balance
+      
+      setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+    } catch (err) {
+      setError(`Failed to process ${savingsForm.transaction_type}. Please try again.`);
+      console.error('Error processing savings transaction:', err);
+    }
+  };
+
   const applyForLoan = async (e) => {
     e.preventDefault();
     try {
@@ -150,6 +183,17 @@ function Sacco() {
       setError('Failed to fetch loans');
       console.error('Error fetching loans:', err);
     }
+  };
+
+  // NEW: Open savings form for a specific SACCO
+  const openSavingsForm = (saccoId, transactionType = 'deposit') => {
+    setSavingsForm({
+      sacco_id: saccoId,
+      amount: '',
+      transaction_type: transactionType,
+      description: ''
+    });
+    setShowSavingsForm(true);
   };
 
   const calculateLoan = () => {
@@ -193,6 +237,20 @@ function Sacco() {
     });
   }, [saccos, searchQuery, myMemberships]);
 
+  // NEW: Calculate total savings across all memberships
+  const calculateTotalSavings = () => {
+    return myMemberships.reduce((total, membership) => {
+      return total + (parseFloat(membership.savings) || 0);
+    }, 0);
+  };
+
+  // NEW: Calculate total shares across all memberships
+  const calculateTotalShares = () => {
+    return myMemberships.reduce((total, membership) => {
+      return total + (parseFloat(membership.shares) || 0);
+    }, 0);
+  };
+
   const renderDashboard = () => {
     if (loading) {
       return (
@@ -203,8 +261,8 @@ function Sacco() {
       );
     }
 
-    const totalSavings = myMemberships.reduce((sum, m) => sum + (parseFloat(m.savings) || 0), 0);
-    const totalShares = myMemberships.reduce((sum, m) => sum + (parseFloat(m.shares) || 0), 0);
+    const totalSavings = calculateTotalSavings();
+    const totalShares = calculateTotalShares();
     const activeLoans = myLoanApplications.filter(app => app.status === 'approved' || app.status === 'disbursed').length;
     const pendingApplications = myLoanApplications.filter(app => app.status === 'pending').length;
 
@@ -236,7 +294,7 @@ function Sacco() {
           </div>
         )}
 
-        {/* Stats Grid */}
+        {/* Enhanced Stats Grid with Savings Focus */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
             <div className="flex items-center justify-between mb-4">
@@ -251,6 +309,12 @@ function Sacco() {
               </div>
             </div>
             <p className="text-sm text-gray-600">Across all your SACCO memberships</p>
+            <button 
+              onClick={() => setActiveTab('memberships')}
+              className="mt-2 text-green-600 hover:text-green-700 text-sm font-medium"
+            >
+              Manage Savings →
+            </button>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
@@ -299,21 +363,38 @@ function Sacco() {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Enhanced Quick Actions with Savings */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
           <h3 className="text-xl font-semibold text-gray-800 mb-6">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="group cursor-pointer" onClick={() => setActiveTab('memberships')}>
               <div className="p-6 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors group-hover:shadow-md">
                 <div className="flex items-center mb-3">
                   <div className="p-2 bg-green-100 rounded-full mr-3">
                     <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-green-800">Add Savings</h4>
+                    <p className="text-sm text-green-700">Deposit to your account</p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">Grow your savings across all SACCOs</p>
+              </div>
+            </div>
+
+            <div className="group cursor-pointer" onClick={() => setActiveTab('memberships')}>
+              <div className="p-6 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors group-hover:shadow-md">
+                <div className="flex items-center mb-3">
+                  <div className="p-2 bg-blue-100 rounded-full mr-3">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-green-800">My Memberships</h4>
-                    <p className="text-sm text-green-700">{myMemberships.filter(m => m.is_active).length} Active</p>
+                    <h4 className="font-semibold text-blue-800">My Memberships</h4>
+                    <p className="text-sm text-blue-700">{myMemberships.filter(m => m.is_active).length} Active</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600">View your SACCO accounts and balances</p>
@@ -321,16 +402,16 @@ function Sacco() {
             </div>
 
             <div className="group cursor-pointer" onClick={() => setActiveTab('my-loans')}>
-              <div className="p-6 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors group-hover:shadow-md">
+              <div className="p-6 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors group-hover:shadow-md">
                 <div className="flex items-center mb-3">
-                  <div className="p-2 bg-blue-100 rounded-full mr-3">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <div className="p-2 bg-purple-100 rounded-full mr-3">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-blue-800">My Loans</h4>
-                    <p className="text-sm text-blue-700">{myLoanApplications.length} Applications</p>
+                    <h4 className="font-semibold text-purple-800">My Loans</h4>
+                    <p className="text-sm text-purple-700">{myLoanApplications.length} Applications</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600">Track your loan applications and repayments</p>
@@ -338,16 +419,16 @@ function Sacco() {
             </div>
 
             <div className="group cursor-pointer" onClick={() => setActiveTab('available')}>
-              <div className="p-6 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors group-hover:shadow-md">
+              <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-xl hover:bg-yellow-100 transition-colors group-hover:shadow-md">
                 <div className="flex items-center mb-3">
-                  <div className="p-2 bg-purple-100 rounded-full mr-3">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-2 bg-yellow-100 rounded-full mr-3">
+                    <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-2m2-12h2m-2 8h2M9 21v-4a1 1 0 011-1h4a1 1 0 011 1v4M9 21H7m2 0h2m-2-8h.01M15 13h2m-2 4h.01" />
                     </svg>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-purple-800">Available SACCOs</h4>
-                    <p className="text-sm text-purple-700">{filteredSaccos.length} to Join</p>
+                    <h4 className="font-semibold text-yellow-800">Available SACCOs</h4>
+                    <p className="text-sm text-yellow-700">{filteredSaccos.length} to Join</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600">Discover new farming cooperatives near you</p>
@@ -356,7 +437,7 @@ function Sacco() {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity with Savings Transactions */}
         {(myLoanApplications.length > 0 || myMemberships.length > 0) && (
           <div className="bg-white rounded-xl shadow p-6 border border-gray-200">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Recent Activity</h3>
@@ -385,18 +466,23 @@ function Sacco() {
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                       <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2-2 2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                   </div>
                   <div className="ml-3 flex-1">
                     <p className="text-sm font-medium text-gray-900">
-                      New contribution to {membership.sacco_name}
+                      Savings account - {membership.sacco_name}
                     </p>
-                    <p className="text-sm text-gray-500">KSh {parseFloat(membership.savings).toLocaleString()} total</p>
+                    <p className="text-sm text-gray-500">KSh {parseFloat(membership.savings).toLocaleString()} total savings</p>
                   </div>
                   <div className="ml-4 flex-shrink-0">
-                    <p className="text-sm text-gray-500">{new Date(membership.last_contribution_date || membership.join_date).toLocaleDateString()}</p>
+                    <button 
+                      onClick={() => openSavingsForm(membership.sacco_id, 'deposit')}
+                      className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    >
+                      Add Savings
+                    </button>
                   </div>
                 </div>
               ))}
@@ -476,7 +562,7 @@ function Sacco() {
           <p className="text-gray-600">Manage your active SACCO accounts and contributions</p>
         </div>
         <div className="text-sm text-gray-600">
-          Total: {myMemberships.length} membership{myMemberships.length !== 1 ? 's' : ''}
+          Total Savings: KSh {calculateTotalSavings().toLocaleString()}
         </div>
       </div>
 
@@ -536,19 +622,25 @@ function Sacco() {
                 </div>
               </div>
 
-              {/* Financial Summary */}
+              {/* Enhanced Financial Summary with Savings Actions */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600 mb-1">
                     KSh {parseFloat(membership.savings || 0).toLocaleString()}
                   </div>
-                  <div className="text-xs text-green-700 font-medium">Savings</div>
+                  <div className="text-xs text-green-700 font-medium">Savings Balance</div>
+                  <button 
+                    onClick={() => openSavingsForm(membership.sacco_id, 'deposit')}
+                    className="mt-2 text-green-600 hover:text-green-700 text-xs font-medium"
+                  >
+                    Add Savings
+                  </button>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-600 mb-1">
                     KSh {parseFloat(membership.shares || 0).toLocaleString()}
                   </div>
-                  <div className="text-xs text-blue-700 font-medium">Shares</div>
+                  <div className="text-xs text-blue-700 font-medium">Shares Value</div>
                 </div>
               </div>
 
@@ -574,7 +666,7 @@ function Sacco() {
                 )}
               </div>
 
-              {/* Action Buttons */}
+              {/* Enhanced Action Buttons with Savings Options */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
                 <button
                   onClick={() => fetchLoansForSacco(membership.sacco_id)}
@@ -587,18 +679,25 @@ function Sacco() {
                   Apply for Loan
                 </button>
                 
-                <button
-                  onClick={() => {
-                    window.open(`mailto:${membership.sacco_contact_email}?subject=SACCO Inquiry&body=Hello ${membership.sacco_name} team,`, '_blank');
-                  }}
-                  className="py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm"
-                  title={`Contact ${membership.sacco_name}`}
-                >
-                  <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  Contact
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openSavingsForm(membership.sacco_id, 'deposit')}
+                    className="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    Add Savings
+                  </button>
+                  
+                  <button
+                    onClick={() => window.open(`mailto:${membership.sacco_contact_email}?subject=SACCO Inquiry&body=Hello ${membership.sacco_name} team,`, '_blank')}
+                    className="py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm"
+                    title={`Contact ${membership.sacco_name}`}
+                  >
+                    <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Contact
+                  </button>
+                </div>
               </div>
 
               {!membership.is_active && (
@@ -721,11 +820,62 @@ function Sacco() {
                       <div className="text-lg font-bold text-green-600">
                         KSh {loan.amount?.toLocaleString() || "0"}
                       </div>
-                      <div className="text-xs text-gray-500">{loan.period || 'N/A'} months</div>
+                      <div className="text-xs text-gray-500">
+                        {loan.repayment_period_months || 'N/A'} months
+                        {loan.interest_rate && ` • ${loan.interest_rate}% APR`}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="py-2">
+                  {/* Timeline Information */}
+                  <div className="py-2 space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Applied</span>
+                      <span className="font-medium">
+                        {new Date(loan.application_date).toLocaleDateString()}
+                        {loan.days_since_application !== null && (
+                          <span className="text-gray-500 ml-1">({loan.days_since_application} days ago)</span>
+                        )}
+                      </span>
+                    </div>
+                    
+                    {loan.approval_date && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">
+                          {loan.status === 'approved' ? 'Approved' : 'Processed'}
+                        </span>
+                        <span className="font-medium">
+                          {new Date(loan.approval_date).toLocaleDateString()}
+                          {loan.processing_days !== null && (
+                            <span className="text-gray-500 ml-1">({loan.processing_days} days processing)</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {loan.disbursement_date && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Disbursed</span>
+                        <span className="font-medium">{new Date(loan.disbursement_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    
+                    {loan.repayment_start_date && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Repayment Starts</span>
+                        <span className="font-medium">{new Date(loan.repayment_start_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    
+                    {loan.repayment_end_date && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Repayment Ends</span>
+                        <span className="font-medium">{new Date(loan.repayment_end_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="py-2 border-t border-gray-100">
                     <div className="flex items-center mb-1">
                       <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -735,15 +885,15 @@ function Sacco() {
                     <p className="text-sm text-gray-600 line-clamp-2">{loan.purpose || "N/A"}</p>
                   </div>
 
-                  {loan.collateral && (
-                    <div className="py-2 border-t border-gray-100">
+                  {loan.loan_type && (
+                    <div className="py-2">
                       <div className="flex items-center mb-1">
                         <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
-                        <span className="text-sm font-medium text-gray-900">Collateral</span>
+                        <span className="text-sm font-medium text-gray-900">Loan Type</span>
                       </div>
-                      <p className="text-sm text-gray-600">{loan.collateral}</p>
+                      <p className="text-sm text-gray-600">{loan.loan_type}</p>
                     </div>
                   )}
                 </div>
@@ -751,34 +901,65 @@ function Sacco() {
                 {/* Status Messages */}
                 {loan.status === 'approved' && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                    <div className="flex items-center">
+                    <div className="flex items-center mb-2">
                       <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      <p className="text-sm text-green-800">Your loan has been approved! Funds will be disbursed within 3 business days.</p>
+                      <p className="text-sm font-semibold text-green-800">Loan Approved!</p>
                     </div>
+                    <p className="text-sm text-green-800">
+                      Your loan of KSh {loan.amount?.toLocaleString()} has been approved. 
+                      {loan.approval_date && ` Approved on ${new Date(loan.approval_date).toLocaleDateString()}.`}
+                      {!loan.disbursement_date && ' Funds will be disbursed within 3 business days.'}
+                    </p>
                   </div>
                 )}
 
                 {loan.status === 'rejected' && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-                    <div className="flex items-center">
+                    <div className="flex items-center mb-2">
                       <svg className="w-4 h-4 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
-                      <p className="text-sm text-red-800">Your application was not approved. Contact your SACCO for more details.</p>
+                      <p className="text-sm font-semibold text-red-800">Application Not Approved</p>
                     </div>
+                    <p className="text-sm text-red-800">
+                      Your application for KSh {loan.amount?.toLocaleString()} was not approved.
+                      {loan.approval_date && ` Decision made on ${new Date(loan.approval_date).toLocaleDateString()}.`}
+                      Contact {loan.sacco_name} for more details or consider reapplying with adjusted terms.
+                    </p>
                   </div>
                 )}
 
                 {loan.status === 'pending' && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                    <div className="flex items-center">
+                    <div className="flex items-center mb-2">
                       <svg className="w-4 h-4 mr-2 text-yellow-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <p className="text-sm text-yellow-800">Your application is under review. You will be notified within 3 business days.</p>
+                      <p className="text-sm font-semibold text-yellow-800">Under Review</p>
                     </div>
+                    <p className="text-sm text-yellow-800">
+                      Your application for KSh {loan.amount?.toLocaleString()} is being reviewed by {loan.sacco_name}.
+                      {loan.days_since_application !== null && ` Submitted ${loan.days_since_application} days ago.`}
+                      You will be notified within 3 business days.
+                    </p>
+                  </div>
+                )}
+
+                {loan.status === 'disbursed' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                    <div className="flex items-center mb-2">
+                      <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <p className="text-sm font-semibold text-blue-800">Loan Disbursed</p>
+                    </div>
+                    <p className="text-sm text-blue-800">
+                      Your loan of KSh {loan.amount?.toLocaleString()} has been disbursed.
+                      {loan.disbursement_date && ` Disbursed on ${new Date(loan.disbursement_date).toLocaleDateString()}.`}
+                      {loan.repayment_start_date && ` Repayment starts on ${new Date(loan.repayment_start_date).toLocaleDateString()}.`}
+                    </p>
                   </div>
                 )}
 
@@ -1436,6 +1617,126 @@ function Sacco() {
     );
   };
 
+  // NEW: Savings Form Modal
+  const renderSavingsFormModal = () => {
+    const selectedSaccoData = saccos.find(s => s.id === savingsForm.sacco_id);
+    const membership = myMemberships.find(m => m.sacco_id === savingsForm.sacco_id);
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {savingsForm.transaction_type === 'deposit' ? 'Add Savings' : 'Withdraw Savings'}
+                </h3>
+                <p className="text-sm text-gray-600">{selectedSaccoData?.name}</p>
+              </div>
+              <button 
+                onClick={() => setShowSavingsForm(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 -m-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {selectedSaccoData && membership && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center mb-2">
+                  {selectedSaccoData.logo ? (
+                    <img src={selectedSaccoData.logo} alt={selectedSaccoData.name} className="w-10 h-10 object-cover rounded mr-3" />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded flex items-center justify-center mr-3">
+                      <span className="text-white font-semibold text-sm">{selectedSaccoData.name.charAt(0)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-blue-900">{selectedSaccoData.name}</h4>
+                    <p className="text-sm text-blue-700">Current Balance: KSh {parseFloat(membership.savings).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSavingsTransaction} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount (KSh) *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">KSh</span>
+                  </div>
+                  <input
+                    type="number"
+                    placeholder={savingsForm.transaction_type === 'deposit' ? "Enter amount to deposit" : "Enter amount to withdraw"}
+                    value={savingsForm.amount}
+                    onChange={(e) => setSavingsForm(prev => ({ ...prev, amount: e.target.value }))}
+                    min="100"
+                    max={savingsForm.transaction_type === 'withdrawal' ? (membership?.savings || 0) : undefined}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                {savingsForm.transaction_type === 'withdrawal' && membership && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum withdrawal: KSh {parseFloat(membership.savings).toLocaleString()}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Monthly savings, Emergency withdrawal, etc."
+                  value={savingsForm.description}
+                  onChange={(e) => setSavingsForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
+                    required
+                  />
+                  <span className="text-sm text-gray-700">
+                    I confirm this {savingsForm.transaction_type} transaction
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowSavingsForm(false)}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex-1 sm:flex-none"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex-1 sm:flex-none flex items-center justify-center"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Confirm {savingsForm.transaction_type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderNavigationTabs = () => (
     <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden sticky top-0 z-10">
       <div className="flex overflow-x-auto border-b border-gray-200">
@@ -1581,6 +1882,7 @@ function Sacco() {
         {/* Modals */}
         {showJoinForm && renderJoinFormModal()}
         {showLoanForm && renderLoanFormModal()}
+        {showSavingsForm && renderSavingsFormModal()}
       </div>
     </div>
   );

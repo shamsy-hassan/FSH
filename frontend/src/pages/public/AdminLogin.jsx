@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { agriConnectAPI } from "../../services/api";
 import { motion } from "framer-motion";
 
 const AdminLogin = () => {
@@ -18,8 +19,32 @@ const AdminLogin = () => {
     setError("");
 
     try {
-      await login(username, password, "admin");
-      navigate("/admin/dashboard");
+      // Send user_type to backend for better validation
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password, user_type: 'admin' }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.type === 'admin') {
+        // Store admin data in localStorage
+        localStorage.setItem('agriConnectToken', data.access_token);
+        localStorage.setItem('agriConnectUser', JSON.stringify(data.admin));
+        localStorage.setItem('agriConnectUserType', 'admin');
+        localStorage.setItem('agriConnectUserId', data.admin.id);
+        
+        // Update API instance
+        agriConnectAPI.token = data.access_token;
+        
+        // Force page reload to reinitialize AuthContext with new data
+        window.location.href = '/admin/dashboard';
+      } else {
+        setError(data.error || "Admin login failed. Please check your credentials.");
+      }
     } catch (error) {
       setError(
         error.message || "Admin login failed. Please check your credentials.",

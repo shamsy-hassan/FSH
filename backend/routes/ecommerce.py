@@ -342,8 +342,8 @@ def create_product():
 @jwt_required()
 def update_product(product_id):
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
@@ -388,8 +388,8 @@ def update_product(product_id):
 @jwt_required()
 def delete_product(product_id):
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
@@ -418,8 +418,8 @@ def delete_product(product_id):
 @jwt_required()
 def update_product_status(product_id):
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
@@ -476,8 +476,8 @@ def create_category():
 @jwt_required()
 def update_category(category_id):
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
@@ -510,8 +510,8 @@ def update_category(category_id):
 @jwt_required()
 def delete_category(category_id):
     try:
-        identity = get_jwt_identity()
-        user_type = identity.get('type') if isinstance(identity, dict) else None
+        identity = json.loads(get_jwt_identity())
+        user_type = identity.get('type')
         
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403

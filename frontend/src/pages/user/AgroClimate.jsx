@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
 import {
   FiChevronDown,
@@ -135,7 +136,7 @@ function AgroClimate() {
           sunrise: new Date().toLocaleTimeString(), // Default values since backend doesn't provide
           sunset: new Date().toLocaleTimeString(),
           last_updated: new Date().toLocaleString(),
-          source: 'Backend API'
+          source: 'Tomorrow.io API'
         });
         setError(null);
       } else {
@@ -328,7 +329,7 @@ function AgroClimate() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+            <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
               <FiCalendar className="mr-2" />
               Select Month for Activities:
             </label>
@@ -502,10 +503,7 @@ function AgroClimate() {
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
                   <p><strong>Last Updated:</strong> {weatherData.last_updated}</p>
                   <p className="text-xs">
-                    {weatherData.source === 'OpenWeatherMap' ?
-                      'Weather data powered by OpenWeatherMap API' :
-                      'Using estimated weather data based on historical patterns'
-                    }
+                    Weather data powered by Tomorrow.io API
                   </p>
                 </div>
               )}

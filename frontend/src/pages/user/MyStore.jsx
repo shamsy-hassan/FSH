@@ -1,5 +1,6 @@
 // MyStore.jsx
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { agriConnectAPI } from '../../services/api';
 
 // Safe JSON parsing function

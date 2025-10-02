@@ -15,12 +15,20 @@ class Category(db.Model):
     products = db.relationship('Product', backref='category', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        # Create full URL for image if it exists
+        image_url = None
+        if self.image:
+            if self.image.startswith('http'):
+                image_url = self.image
+            else:
+                image_url = f'http://localhost:5000/static/uploads/{self.image}'
+        
         return {
             'id': self.id,
             'name': self.name,
             'type': self.type,
             'description': self.description,
-            'image': self.image
+            'image': image_url
         }
 
 class Product(db.Model):
@@ -45,6 +53,14 @@ class Product(db.Model):
     order_items = db.relationship('OrderItem', backref='product', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        # Create full URL for image if it exists
+        image_url = None
+        if self.image:
+            if self.image.startswith('http'):
+                image_url = self.image
+            else:
+                image_url = f'http://localhost:5000/static/uploads/{self.image}'
+        
         return {
             'id': self.id,
             'name': self.name,
@@ -52,7 +68,7 @@ class Product(db.Model):
             'price': self.price,
             'category_id': self.category_id,
             'stock_quantity': self.stock_quantity,
-            'image': self.image,
+            'image': image_url,
             'brand': self.brand,
             'weight': self.weight,
             'dimensions': self.dimensions,

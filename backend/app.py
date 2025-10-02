@@ -1,7 +1,7 @@
 #backend/app.py
 import os
 import sys
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 # Add the current directory to the Python path
@@ -36,6 +36,7 @@ def create_app(config_name='default'):
     from routes.skill import skill_bp
     from routes.storage import storage_bp
     from routes.message import message_bp
+    from routes.dashboard import dashboard_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/user')
@@ -49,6 +50,13 @@ def create_app(config_name='default'):
     app.register_blueprint(skill_bp, url_prefix='/api/skill')
     app.register_blueprint(storage_bp, url_prefix='/api/storage')
     app.register_blueprint(message_bp, url_prefix='/api/message')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    
+    # Serve uploaded files
+    @app.route('/static/uploads/<path:filename>')
+    def uploaded_file(filename):
+        uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
+        return send_from_directory(uploads_dir, filename)
     
     # Initialize database and create admin user
     with app.app_context():

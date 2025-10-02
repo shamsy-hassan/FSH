@@ -33,13 +33,13 @@ const ProtectedRoute = ({ adminOnly = false }) => {
 
   // Admin-only route but user is not admin
   if (adminOnly && !isAdmin) {
-    console.log('Redirecting - admin access required');
-    // Redirect to appropriate dashboard based on user type
-    if (userType === "user") {
-      const dashboardPath = user?.user_type === "farmer" ? "/user/dashboard" : "/supplier/dashboard";
-      return <Navigate to={dashboardPath} replace />;
-    }
-    return <Navigate to="/user-login" replace />;
+    console.log('Redirecting - admin access required, user type:', userType);
+    // Clear invalid session and redirect to admin login
+    localStorage.removeItem('agriConnectToken');
+    localStorage.removeItem('agriConnectUser');
+    localStorage.removeItem('agriConnectUserType');
+    localStorage.removeItem('agriConnectUserId');
+    return <Navigate to="/admin-login" replace />;
   }
 
   // User-only route but user is admin

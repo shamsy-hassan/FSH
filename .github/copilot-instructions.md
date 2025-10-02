@@ -1,196 +1,127 @@
 # Copilot Instructions for FSH AgriConnect Platform
 
 ## Architecture Overview
-FSH is a full-stack agricultural platform with Flask/SQLAlchemy backend and React/Vite frontend. The system serves farmers, suppliers, and admins with features for market trading, SACCO (savings & credit cooperatives), agro-climate data, storage solutions, and skill development.
+FSH is a full-stack agricultural platform connecting farmers, suppliers, and admins through market trading, SACCO (savings & credit cooperatives), agro-climate data, storage solutions, and skill development.
 
-**Key Domain Models:** User, Profile, Sacco, MarketPost, Order, Region, WeatherData, StorageRequest, Message, Skill
-**API Pattern:** RESTful with JWT authentication, all routes prefixed `/api/{module}`
-**Database:** SQLite (dev) with SQLAlchemy ORM, relationship-heavy models
+**Tech Stack:** Flask/SQLAlchemy backend + React 19/Vite frontend
+**Authentication:** Dual-role JWT system (user/admin) with role-based routing
+**Database:** SQLite (dev) with relationship-heavy SQLAlchemy models
+**API Pattern:** RESTful with consistent `/api/{module}` prefixes
+**UI Framework:** Material-UI v7 + Tailwind CSS v4 + Framer Motion for animations
+**Python Version:** 3.12+ required for backend development
 
-## Development Workflow
+## Quick Start
 
-### Backend Setup
+### Backend (Flask on :5000)
 ```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
-python app.py  # Runs on :5000
+python app.py
 ```
 
-### Frontend Setup  
+### Frontend (Vite on :5173)  
 ```bash
 cd frontend
 npm install
-npm run dev  # Runs on :5173 with Vite
+npm run dev
 ```
 
-### Database Management
-- Models in `backend/models/` with relationships via `db.relationship()`
-- Extensions initialized in `extensions.py` (db, jwt, mail)
-- Database context required: `with app.app_context():`
-- Manual testing scripts: `test_sacco_creation.py`, `direct_sacco_test.py`
+### Database Operations
+- Always wrap direct model operations: `with app.app_context():`
+- Test scripts available: `test_sacco_creation.py`, `direct_sacco_test.py`
+- Manual testing credentials: `admin@famar.com/admin123` (auto-created on first run)
 
-## Code Conventions
+## Critical Architecture Patterns
 
-### Backend Patterns
-- **Route Structure:** Each module has blueprint in `routes/{module}.py` with `{module}_bp`
-- **Model Methods:** Always include `to_dict()` for JSON serialization
-- **Authentication:** Use `@jwt_required()` and `get_jwt_identity()` from flask-jwt-extended
-- **Error Handling:** Return `jsonify({'error': message}), status_code`
-- **File Uploads:** Use `extensions.allowed_file()` and `UPLOAD_FOLDER` config
-
-### Frontend Patterns
-- **API Integration:** Single `services/api.js` class with token management
-- **Routing:** User routes `/user/*`, admin routes `/admin/*`, public routes at root
-- **State:** AuthContext for user state, localStorage for token persistence
-- **Components:** Layout wrapper with Navbar/Sidebar, ProtectedRoute for auth
-- **Dashboard Data:** Use `api.user.getDashboard()` and `api.admin.getDashboard()` for real-time stats
-- **Loading States:** Always implement loading, error, and retry patterns for API calls
-
-### Key Relationships
-- User → Profile (1:1), User → Orders (1:many), User → SaccoMemberships (many:many)
-- Region → WeatherData (1:many), Region → CropRecommendations (1:many)
-- Sacco → Members → Loans (nested relationships)
-
-## Critical Integration Points
-
-### Authentication Flow
-1. Login via `/api/auth/login` returns JWT token
-2. Frontend stores in localStorage as `agriConnectToken`
-3. API class auto-includes `Authorization: Bearer {token}` header
-4. User verification disabled in dev (`is_verified=True` in auth.py)
-
-### Weather API Integration
-- External WeatherAPI.com integration in agroclimate routes
-- Config: `WEATHER_API_KEY` environment variable required (get free key at weatherapi.com)
-- Caching pattern: Store weather data in WeatherData model (daily cache)
-- Fallback: Returns proper error codes (503/502/504) when API unavailable
-- Rate limiting: Uses daily cache to avoid excessive API calls
-
-### File Upload Pattern
-- Static uploads go to `backend/static/uploads/`
-- Use `werkzeug.utils.secure_filename()` for security
-- Max 16MB limit in config (`MAX_CONTENT_LENGTH`)
-
-## Common Issues & Solutions
-
-### Registration/Authentication Errors
-- **NoneType encode error**: Missing required fields validation - always validate `username`, `email`, `password` before processing
-- **Nested data structure**: Frontend sends `{user: {...}, profile: {...}}` format - handle both nested and flat structures
-- **Username/field required errors**: Check data structure mismatch between form components and AuthContext expectations
-
-### Database Context Errors
-Always wrap direct model operations in app context:
+### JWT Identity Encoding (MANDATORY) ✅ CONSISTENTLY IMPLEMENTED
 ```python
-with app.app_context():
-    # Database operations here
-```
-
-### CORS Issues
-CORS enabled via `flask_cors`, frontend assumes backend on `localhost:5000`
-
-### Token Management
-Frontend API class handles token refresh automatically, stores userType for role-based routing
-
-## Testing Approach
-- Manual integration tests via scripts in backend root
-- Test user credentials: admin@famar.com/admin123
-- No formal test suite - use direct API calls or model testing scripts
-
-## Project Overview
-FSH (AgriConnect Platform) - Agricultural platform with dual-role system (farmers/admins) featuring e-commerce, weather data, SACCO management, and marketplace functionality.
-
-- **Backend:** Flask (Python 3.12), SQLAlchemy ORM, JWT authentication, OpenWeatherMap integration
-- **Frontend:** React + Vite, TailwindCSS + Material-UI, custom API service layer
-- **Key Domains:** Auth, E-commerce, AgriClimate, Market, SACCO, Storage, Skills, Orders, Messaging
-
-## Architecture & Data Flow
-
-### Backend Structure (`backend/`)
-- **Application Factory:** `app.py` - registers 12 domain blueprints with `/api/<domain>` prefixes
-- **Extensions:** `extensions.py` - shared Flask extensions (db, jwt, mail)
-- **Config:** Environment-based config with OpenWeatherMap API key, JWT settings, file uploads
-- **Models:** Domain-separated SQLAlchemy models (`models/<domain>.py`)
-- **Routes:** Blueprint-based routes (`routes/<domain>.py`) - each handles one feature area
-
-### Frontend Architecture (`frontend/src/`)
-- **API Layer:** `services/api.js` - centralized AgriConnectAPI class with domain-specific methods
-- **Auth Context:** `contexts/AuthContext.jsx` - manages user/admin state, token persistence
-- **Page Structure:** `/pages/admin/` vs `/pages/user/` - role-based UI segregation
-- **Shared Components:** Layout, Navbar, Sidebar, ProtectedRoute for access control
-
-## Critical Patterns & Conventions
-
-### JWT Authentication Flow
-```python
-# Backend: Always encode identity as JSON string
+# Backend: Always encode identity as JSON string with type
 identity = json.dumps({'id': user.id, 'type': 'user'|'admin'})
 token = create_access_token(identity=identity)
 
-# Protected routes: Always parse identity back to dict
+# Protected routes: Parse identity back to dict
 identity = json.loads(get_jwt_identity())
 user_id = identity['id']
 is_admin = identity['type'] == 'admin'
 ```
 
+**CONSISTENT:** All routes now use `json.loads(get_jwt_identity())` pattern correctly.
+
 ### Frontend API Integration
-```javascript
-// All API calls through centralized service
-const agriConnectAPI = new AgriConnectAPI()
-// Token automatically attached from localStorage in getHeaders()
-// Endpoints: /api/auth/*, /api/admin/*, /api/ecommerce/*, etc.
-```
+- **Centralized Service:** All API calls through `AgriConnectAPI` class in `services/api.js`
+- **Token Management:** Auto-attached from localStorage in `getHeaders()`
+- **Error Handling:** Use `agriConnectAPI.handleResponse()` for consistent parsing
+- **State Persistence:** `agriConnectToken`, `agriConnectUser`, `agriConnectUserType` in localStorage
+- **UI Components:** Material-UI components with Tailwind utility classes
+- **Animations:** Framer Motion for page transitions and micro-interactions
+- **Icons:** Mix of React Icons (Fi* prefix) and Heroicons - prefer React Icons for consistency
 
-### Error Handling Patterns
-- **Backend:** Always return `{ "error": "message" }` JSON, never HTML responses
-- **Frontend:** Use `agriConnectAPI.handleResponse()` for consistent error parsing
-- **Graceful Degradation:** Empty data (regions, categories) should show friendly messages, not crash UI
+### Route Structure
+- **Backend Blueprints:** Each domain has `routes/{module}.py` with `{module}_bp`
+- **Frontend Pages:** Role-based structure: `/pages/admin/` vs `/pages/user/`
+- **Protection:** `ProtectedRoute` component with `adminOnly` prop for role gates
 
-## Development Workflows
+### Model Conventions
+- **All models must include `to_dict()` method** for JSON serialization
+- **Relationships:** Extensive use of `db.relationship()` with proper foreign keys
+- **Domain separation:** Models split by domain (`models/{domain}.py`)
 
-### Running the Application
-```bash
-# Backend (Flask development server)
-cd backend && python app.py
+## Domain Models & Relationships
+- **User System:** `User` ↔ `UserProfile` (1:1), `User` → `Orders` (1:many)
+- **Market:** `User` → `MarketPost` (1:many), supports both products and needs
+- **SACCO:** `User` ↔ `SaccoMember` (many:many) with nested financial relationships
+- **Storage:** `User` → `StorageRequest` (1:many) → `Warehouse` relationships
+- **Weather:** `Region` → `WeatherData` (1:many) with daily caching pattern
 
-# Frontend (Vite dev server) 
-cd frontend && npm run dev
+## External Integrations & Config
 
-# Database operations via Flask shell in backend/
-```
+### Tomorrow.io Integration
+- **Config:** `WEATHER_API_KEY` environment variable (get free key at tomorrow.io)
+- **Caching:** Daily cache in `WeatherData` model to avoid rate limits
+- **Error Handling:** Returns 503/502/504 when external API unavailable
+- **Usage:** AgriClimate routes consume and cache weather data
 
-### Adding New Features
-1. **Backend:** Create model in `models/<domain>.py`, routes in `routes/<domain>.py`
-2. **Frontend:** Add API methods to `services/api.js`, create components/pages
-3. **Auth:** Use `@jwt_required()` + `json.loads(get_jwt_identity())` pattern
-4. **Admin Features:** Check `identity['type'] == 'admin'` backend + context frontend
+### File Upload Pattern
+- **Storage:** `backend/static/uploads/` directory
+- **Security:** Use `werkzeug.utils.secure_filename()` + `extensions.allowed_file()`
+- **Limits:** 100MB max (`MAX_CONTENT_LENGTH` in config) - designed for video uploads
+- **Frontend:** Form data uploads, not JSON for file endpoints
+- **Extensions:** `.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.mp4`, `.avi`, `.mov` allowed
 
-### Domain Models Overview
-- **User System:** User, UserProfile, Admin - dual authentication with role-based access
-- **E-commerce:** Product, Category, Cart, CartItem - shopping cart functionality  
-- **AgriClimate:** Region, WeatherData, CropRecommendation - weather/agricultural data
-- **Market:** MarketPost - farmer-to-farmer marketplace
-- **SACCO:** SaccoMember, financial cooperative features
-- **Storage:** StorageRequest, Warehouse - agricultural storage services
-- **Orders:** Order, OrderItem - transaction management
-- **Messaging:** Message - internal communication system
+### Development Config
+- **Database:** SQLite at `backend/app.db` (also `instance/app.db`)
+- **CORS:** Enabled via `flask_cors` for localhost:5173 → localhost:5000
+- **Auth:** User verification disabled (`is_verified=True` in dev)
+- **JWT:** 24-hour token expiry, stored in localStorage
+- **Frontend Dev Server:** Vite HMR on port 5173 with React 19 + fast refresh
+- **Static Files:** Uploads stored in `backend/static/uploads/`
 
-## Common Pitfalls & Solutions
+## Common Issues & Solutions
 
 ### Authentication Issues
-❌ **Wrong:** `user_id = get_jwt_identity()` (returns string, not ID)
+❌ **Wrong:** `user_id = get_jwt_identity()` (returns JSON string, not ID)
 ✅ **Correct:** 
 ```python
 identity = json.loads(get_jwt_identity())
 user_id = identity['id']
+is_admin = identity['type'] == 'admin'
 ```
 
-### API Endpoint Mismatches  
-❌ **Wrong:** Frontend calls `/api/user/profile`
-✅ **Correct:** Match backend blueprint: `/api/auth/profile`
+**Note:** The codebase consistently uses the JSON pattern - inconsistent usage has been resolved.
 
-### Role Access Control
+### Registration Data Structure
+- **Frontend sends:** `{user: {...}, profile: {...}}` nested format
+- **Backend handles:** Both nested and flat structures for backward compatibility
+- **Required fields:** Always validate `username`, `email`, `password` before processing
+
+### Database Context Errors
+- **Direct model operations:** Always wrap in `with app.app_context():`
+- **Testing scripts:** Use pattern from `direct_sacco_test.py` for model testing
+- **Blueprint routes:** Context automatically available in request handlers
+
+### Role-Based Access Control  
 ❌ **Wrong:** No admin validation in protected routes
 ✅ **Correct:**
 ```python
@@ -198,9 +129,16 @@ if identity['type'] != 'admin':
     return jsonify({'error': 'Admin access required'}), 403
 ```
 
-### Empty Data Handling
-❌ **Wrong:** Return 500 when regions list is empty
-✅ **Correct:** Return `{'regions': []}` with friendly frontend message
+### Frontend Route Mismatches
+- **ProtectedRoute:** Use `adminOnly` prop to gate admin pages
+- **API endpoints:** Match backend blueprint prefixes (`/api/auth/`, not `/api/user/`)
+- **Empty data:** Return `{'regions': []}` not 500 errors for empty lists
+
+## Testing Approach
+- Manual integration tests via scripts in backend root
+- Test user credentials: `admin@famar.com/admin123`
+- No formal test suite - use direct API calls or model testing scripts
+- Database testing: Use `with app.app_context():` pattern from test scripts
 
 ## Key Files for Understanding System
 - **Backend Entry:** `backend/app.py` - blueprint registration and CORS setup
@@ -208,6 +146,25 @@ if identity['type'] != 'admin':
 - **Auth Flow:** `backend/routes/auth.py` + `frontend/src/contexts/AuthContext.jsx`
 - **Model Relationships:** Start with `backend/models/user.py` to see entity connections
 - **Admin UI:** `frontend/src/pages/admin/` - role-specific interface patterns
+- **Frontend Dependencies:** React 19, Material-UI v7, Tailwind v4, Framer Motion, React Router v7
+
+## Development Workflow
+
+### Running the Application
+```bash
+# Backend (Terminal 1) - requires Python 3.12
+cd backend && python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt && python app.py
+
+# Frontend (Terminal 2) - requires Node.js
+cd frontend && npm install && npm run dev
+```
+
+### Testing Patterns
+- **Manual Integration:** Use scripts like `test_sacco_creation.py` in backend root
+- **API Testing:** Direct HTTP calls to `localhost:5000/api/{endpoint}`
+- **Admin Credentials:** `admin@famar.com/admin123` (auto-created on first run)
+- **Database Testing:** Always wrap with `with app.app_context():` for direct model operations
 
 ---
 *This file should be updated as new patterns emerge. Focus on documenting what makes this codebase unique, not generic Flask/React practices.*

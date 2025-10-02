@@ -17,7 +17,9 @@ def allowed_file(filename):
 @profile_bp.route('', methods=['GET'])
 @jwt_required()
 def get_user_profile():
-    identity = get_jwt_identity()
+    import json
+    identity_raw = get_jwt_identity()
+    identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)
     if identity.get('type') != 'user':
         return jsonify({'message': 'User access required'}), 403
     

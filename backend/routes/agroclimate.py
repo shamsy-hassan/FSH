@@ -9,31 +9,55 @@ from datetime import date
 
 agroclimate_bp = Blueprint('agroclimate', __name__)
 
+def _get_weather_condition(weather_code):
+    """Convert Tomorrow.io weather code to readable condition"""
+    weather_codes = {
+        0: 'Unknown',
+        1000: 'Clear',
+        1001: 'Cloudy',
+        1100: 'Mostly Clear',
+        1101: 'Partly Cloudy',
+        1102: 'Mostly Cloudy',
+        2000: 'Fog',
+        2100: 'Light Fog',
+        3000: 'Light Wind',
+        3001: 'Wind',
+        3002: 'Strong Wind',
+        4000: 'Drizzle',
+        4001: 'Rain',
+        4200: 'Light Rain',
+        4201: 'Heavy Rain',
+        5000: 'Snow',
+        5001: 'Flurries',
+        5100: 'Light Snow',
+        5101: 'Heavy Snow',
+        6000: 'Freezing Drizzle',
+        6001: 'Freezing Rain',
+        6200: 'Light Freezing Rain',
+        6201: 'Heavy Freezing Rain',
+        7000: 'Ice Pellets',
+        7101: 'Heavy Ice Pellets',
+        7102: 'Light Ice Pellets',
+        8000: 'Thunderstorm'
+    }
+    return weather_codes.get(weather_code, 'Unknown')
+
 @agroclimate_bp.route('/regions', methods=['GET'])
 def get_regions():
     try:
-        print("DEBUG: Starting get_regions request")
-        print(f"DEBUG: Database URI: {db.engine.url}")
-        
         regions = Region.query.all()
-        print(f"DEBUG: Found {len(regions)} regions in API call")
-        
-        for region in regions:
-            print(f"DEBUG: Region {region.name} - {region.id} - lat:{region.latitude}, lon:{region.longitude}")
         
         region_dicts = []
         for region in regions:
             try:
                 region_dict = region.to_dict()
                 region_dicts.append(region_dict)
-                print(f"DEBUG: Successfully converted region {region.name} to dict")
             except Exception as e:
-                print(f"DEBUG: Error converting region {region.name} to dict: {e}")
+                print(f"ERROR: Error converting region {region.name} to dict: {e}")
         
         result = {
             'regions': region_dicts
         }
-        print(f"DEBUG: Returning response: {result}")
         return jsonify(result)
         
     except Exception as e:
@@ -60,45 +84,64 @@ def get_weather(region_id):
     if recent_weather:
         return jsonify(recent_weather.to_dict())
     
-    # If no recent data, fetch from WeatherAPI.com
+    # If no recent data, fetch from Tomorrow.io
     try:
         from config import Config
         API_KEY = Config.WEATHER_API_KEY
         
         # Check if API key is configured
-        if API_KEY == "your-weatherapi-key-here" or not API_KEY:
-            return jsonify({
-                'message': 'Weather API key not configured',
-                'error': 'Please set WEATHER_API_KEY environment variable with your WeatherAPI.com key'
-            }), 503
+        if (API_KEY == "your-weatherapi-key-here" or 
+            API_KEY == "your-actual-api-key-here" or 
+            API_KEY == "your-tomorrow-io-api-key-here" or
+            not API_KEY or 
+            API_KEY == "your-weather-api-key-if-available"):
+            
+            # For development: return sample data when API key not configured
+            # In production, you should get a real API key from https://www.tomorrow.io/
+            sample_weather = WeatherData(
+                region_id=region_id,
+                date=date.today(),
+                temperature=25.0 + (region_id % 5),  # Vary by region
+                humidity=60 + (region_id % 30),
+                rainfall=0.5 * (region_id % 3),
+                wind_speed=3.0 + (region_id % 10),
+                wind_direction=180 + (region_id % 180),
+                weather_condition="Partly Cloudy"
+            )
+            
+            # Don't save to database - just return the data
+            return jsonify(sample_weather.to_dict())
         
-        # WeatherAPI.com current weather endpoint
-        base_url = f"http://api.weatherapi.com/v1/current.json?key={API_KEY}&q={region.latitude},{region.longitude}&aqi=no"
+        # Tomorrow.io realtime weather endpoint
+        base_url = f"https://api.tomorrow.io/v4/weather/realtime"
+        params = {
+            'location': f"{region.latitude},{region.longitude}",
+            'units': 'metric',
+            'apikey': API_KEY
+        }
         
-        print(f"DEBUG: Fetching weather from WeatherAPI: {base_url}")
-        response = requests.get(base_url, timeout=10)
+        response = requests.get(base_url, params=params, timeout=10)
         
         if response.status_code != 200:
-            print(f"DEBUG: WeatherAPI request failed with status {response.status_code}: {response.text}")
             return jsonify({
-                'message': 'Failed to fetch weather data from WeatherAPI',
+                'message': 'Failed to fetch weather data from Tomorrow.io',
                 'error': response.text,
                 'status_code': response.status_code
             }), 502
         
         weather_data = response.json()
-        print(f"DEBUG: WeatherAPI response: {weather_data}")
         
-        current = weather_data.get('current', {})
-        condition = current.get('condition', {})
+        # Extract data from Tomorrow.io response structure
+        data = weather_data.get('data', {})
+        values = data.get('values', {})
         
         parsed_weather = {
-            'temperature': current.get('temp_c', 0),
-            'humidity': current.get('humidity', 0), 
-            'rainfall': current.get('precip_mm', 0.0),
-            'wind_speed': current.get('wind_kph', 0) / 3.6,  # Convert km/h to m/s
-            'wind_direction': current.get('wind_degree', 0),
-            'weather_condition': condition.get('text', 'Unknown')
+            'temperature': values.get('temperature', 0),
+            'humidity': values.get('humidity', 0), 
+            'rainfall': values.get('precipitationIntensity', 0.0),
+            'wind_speed': values.get('windSpeed', 0),
+            'wind_direction': values.get('windDirection', 0),
+            'weather_condition': _get_weather_condition(values.get('weatherCode', 0))
         }
         
         # Save to database
@@ -113,19 +156,16 @@ def get_weather(region_id):
         return jsonify(new_weather.to_dict())
     
     except requests.exceptions.Timeout:
-        print("DEBUG: WeatherAPI request timed out")
         return jsonify({
             'message': 'Weather service request timed out',
-            'error': 'Weather data service is currently unavailable'
+            'error': 'Tomorrow.io weather service is currently unavailable'
         }), 504
     except requests.exceptions.ConnectionError:
-        print("DEBUG: WeatherAPI connection error")
         return jsonify({
             'message': 'Unable to connect to weather service',
-            'error': 'Weather data service is currently unavailable'
+            'error': 'Tomorrow.io weather service is currently unavailable'
         }), 503
     except Exception as e:
-        print(f"DEBUG: Weather API error: {str(e)}")
         return jsonify({
             'message': 'Failed to fetch weather data',
             'error': str(e)

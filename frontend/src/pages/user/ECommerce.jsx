@@ -17,7 +17,10 @@ import {
   FiPackage,
   FiUser,
   FiArrowRight,
-  FiHome
+  FiHome,
+  FiCheck,
+  FiTruck,
+  FiShield
 } from 'react-icons/fi';
 import agriConnectAPI from '../../services/api';
 
@@ -38,8 +41,11 @@ function ECommerce() {
   const [priceRange, setPriceRange] = useState([0, 10000]);
   const [orderMessage, setOrderMessage] = useState(null);
   const [quantitySelectors, setQuantitySelectors] = useState({});
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
-  // Predefined category types with icons
+  // Enhanced category types with better organization
   const categoryTypes = {
     seeds: { icon: '🌱', color: 'from-green-500 to-green-600', badge: 'bg-green-100 text-green-800' },
     fertilizers: { icon: '🧪', color: 'from-blue-500 to-blue-600', badge: 'bg-blue-100 text-blue-800' },
@@ -50,12 +56,13 @@ function ECommerce() {
     others: { icon: '📦', color: 'from-gray-500 to-gray-600', badge: 'bg-gray-100 text-gray-800' }
   };
 
-  // Sort options
+  // Enhanced sort options
   const sortOptions = [
     { value: 'featured', label: 'Featured', icon: '⭐' },
     { value: 'price_low', label: 'Price: Low to High', icon: '💰' },
     { value: 'price_high', label: 'Price: High to Low', icon: '💎' },
     { value: 'newest', label: 'Newest First', icon: '🆕' },
+    { value: 'rating', label: 'Highest Rated', icon: '⭐' },
     { value: 'bestselling', label: 'Best Selling', icon: '🔥' }
   ];
 
@@ -83,7 +90,7 @@ function ECommerce() {
     };
   }, [searchQuery, selectedCategory]);
 
-  // Filter and sort products
+  // Enhanced filtering and sorting
   useEffect(() => {
     let result = [...products];
 
@@ -94,9 +101,12 @@ function ECommerce() {
 
     // Filter by search term
     if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       result = result.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase())
+        p.name.toLowerCase().includes(query) ||
+        p.description.toLowerCase().includes(query) ||
+        p.brand?.toLowerCase().includes(query) ||
+        p.category?.name?.toLowerCase().includes(query)
       );
     }
 
@@ -119,8 +129,12 @@ function ECommerce() {
       case "newest":
         result.sort((a, b) => new Date(b.created_at || Date.now()) - new Date(a.created_at || Date.now()));
         break;
+      case "bestselling":
+        result.sort((a, b) => (b.sales_count || 0) - (a.sales_count || 0));
+        break;
       default:
-        // Featured (default sorting)
+        // Featured (default sorting) - featured products first
+        result.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
         break;
     }
 
@@ -147,7 +161,7 @@ function ECommerce() {
         category_id: categoryId, 
         search: search,
         page: 1,
-        per_page: 20,
+        per_page: 50, // Increased for better browsing
         sort: sortOption
       };
       const data = await agriConnectAPI.ecommerce.getProducts(params);
@@ -175,16 +189,21 @@ function ECommerce() {
       if (!agriConnectAPI.isAuthenticated()) {
         setError('Please login to add items to cart');
         setTimeout(() => setError(null), 3000);
+        navigate('/login');
         return;
       }
+
       await agriConnectAPI.ecommerce.addToCart(product.id, quantity);
       await fetchCart();
-      setCartVisible(true);
+      
+      // Show success notification
       setOrderMessage({
         type: 'success',
         title: 'Added to Cart!',
-        message: `${quantity} x ${product.name} added to cart successfully!`
+        message: `${quantity} x ${product.name} added to cart successfully!`,
+        product: product
       });
+      
       setTimeout(() => setOrderMessage(null), 3000);
     } catch (err) {
       setError(err.message || 'Failed to add item to cart');
@@ -221,6 +240,8 @@ function ECommerce() {
     try {
       await agriConnectAPI.ecommerce.clearCart();
       await fetchCart();
+      setSelectedItems(new Set());
+      setSelectAll(false);
       setOrderMessage({
         type: 'info',
         title: 'Cart Cleared',
@@ -233,6 +254,32 @@ function ECommerce() {
     }
   };
 
+  // Selection functions
+  const toggleItemSelection = (itemId) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedItems(newSelected);
+    setSelectAll(newSelected.size === cart.length && cart.length > 0);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedItems(new Set());
+      setSelectAll(false);
+    } else {
+      setSelectedItems(new Set(cart.map(item => item.id)));
+      setSelectAll(true);
+    }
+  };
+
+  const getSelectedCartItems = () => {
+    return cart.filter(item => selectedItems.has(item.id));
+  };
+
   const handleSortChange = (value) => {
     setSortOption(value);
     fetchProducts(selectedCategory, searchQuery);
@@ -241,73 +288,117 @@ function ECommerce() {
   const handleCheckout = async (orderData) => {
     try {
       setLoading(true);
-      const deliveryDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
-      const deliveryDateString = deliveryDate.toLocaleString();
+      
+      const selectedCartItems = getSelectedCartItems();
+      if (selectedCartItems.length === 0) {
+        setError('Please select items to checkout');
+        return;
+      }
 
+      // Validate required fields
+      if (!orderData.shipping_address?.trim()) {
+        setError('Please provide a valid shipping address');
+        return;
+      }
+
+      const deliveryDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      const deliveryDateString = deliveryDate.toLocaleDateString();
+
+      // Step 1: Save unselected items and temporarily remove them from cart
+      const unselectedItems = cart.filter(item => !selectedItems.has(item.id));
+      
+      // Remove unselected items from cart temporarily
+      for (const item of unselectedItems) {
+        try {
+          await agriConnectAPI.ecommerce.removeFromCart(item.id);
+        } catch (err) {
+          console.error('Error removing unselected item:', err);
+        }
+      }
+
+      // Step 2: Create order with selected items only (backend will process current cart)
       const order = {
         ...orderData,
-        customer: agriConnectAPI.getUserId() || "Guest",
-        products: cart,
-        total: calculateCartTotal(),
-        status: "pending",
-        deliveryDate: deliveryDateString,
-        createdAt: new Date().toISOString()
+        // Don't send products array - backend uses cart items
       };
 
-      console.log("Order submitted:", order);
-      
-      // Place the order
+      // Place the order - Backend will process current cart and clear it
       await agriConnectAPI.ecommerce.placeOrder(order);
       
-      // Clear the cart after successful order
-      await agriConnectAPI.ecommerce.clearCart();
-      setCart([]);
+      // Step 3: Re-add unselected items back to cart
+      for (const item of unselectedItems) {
+        try {
+          const productId = item.product_id || item.product?.id;
+          if (productId) {
+            await agriConnectAPI.ecommerce.addToCart(productId, item.quantity);
+          } else {
+            console.warn('Could not re-add item - missing product ID:', item);
+          }
+        } catch (err) {
+          console.error('Error re-adding item to cart:', err);
+        }
+      }
+      
+      // Refresh cart and reset selections
+      await fetchCart();
+      setSelectedItems(new Set());
+      setSelectAll(false);
       setCartVisible(false);
       
       // Show success message
       setOrderMessage({
         type: 'success',
         title: "Order Placed Successfully!",
-        message: `Your order will be delivered to ${orderData.deliveryLocation} by ${deliveryDateString}.`,
+        message: `Your order for ${selectedCartItems.length} item(s) will be delivered to ${orderData.shipping_address} by ${deliveryDateString}. Order ID: #${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
         order: order
       });
 
       // Navigate to orders page after a short delay
       setTimeout(() => {
         navigate('/user/my-orders');
-      }, 2000);
+      }, 3000);
       
     } catch (err) {
       console.error("Failed to place order:", err);
       setOrderMessage({
         type: 'error',
         title: "Order Failed",
-        message: "There was an error processing your order. Please try again."
+        message: err.message || "There was an error processing your order. Please try again."
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateCartTotal = () => {
-    return cart.reduce((sum, item) => sum + (parseFloat(item.product?.price || item.price) * item.quantity), 0);
+  const calculateCartTotal = (useSelectedOnly = false) => {
+    const itemsToCalculate = useSelectedOnly ? getSelectedCartItems() : cart;
+    return itemsToCalculate.reduce((sum, item) => {
+      const price = parseFloat(item.product?.price || item.price || 0);
+      const quantity = item.quantity || 1;
+      return sum + (price * quantity);
+    }, 0);
   };
 
-  // Enhanced quick order function
+  const calculateCartItems = (useSelectedOnly = false) => {
+    const itemsToCalculate = useSelectedOnly ? getSelectedCartItems() : cart;
+    return itemsToCalculate.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  };
+
   const placeDirectOrder = async (product, quantity = 1) => {
     if (!agriConnectAPI.isAuthenticated()) {
       setError('Please login to place orders');
       setTimeout(() => setError(null), 5000);
+      navigate('/login');
       return;
     }
 
     // Enhanced shipping address prompt with validation
     const shippingAddress = prompt(
-      '🚚 Quick Order - Shipping Information\n\nPlease provide your shipping address for delivery:',
-      'Enter your full address including city and postal code'
+      '🚚 Quick Order - Shipping Information\n\nPlease provide your complete shipping address for delivery:',
+      'Enter your full address including street, city, and postal code'
     );
 
-    if (!shippingAddress || shippingAddress.trim() === '' || shippingAddress === 'Enter your full address including city and postal code') {
+    if (!shippingAddress || shippingAddress.trim() === '' || shippingAddress === 'Enter your full address including street, city, and postal code') {
       setError('Shipping address is required for placing orders');
       setTimeout(() => setError(null), 5000);
       return;
@@ -316,25 +407,24 @@ function ECommerce() {
     try {
       setLoading(true);
       
-      // Add product to cart with specified quantity
-      await agriConnectAPI.ecommerce.addToCart(product.id, quantity);
-      
-      // Create order with proper shipping address
+      // Create order data
       const orderData = {
         shipping_address: shippingAddress.trim(),
         billing_address: shippingAddress.trim(),
         payment_method: 'cash_on_delivery',
+        products: [{
+          product_id: product.id,
+          quantity: quantity,
+          price: product.price
+        }]
       };
 
       await agriConnectAPI.ecommerce.placeOrder(orderData);
       
-      // Refresh cart
-      await fetchCart();
-      
       setOrderMessage({
         type: 'success',
         title: "Order Placed Successfully!",
-        message: `Your order for ${quantity} x ${product.name} will be delivered to your address within 2-3 business days.`,
+        message: `Your order for ${quantity} x ${product.name} will be delivered within 2-3 business days.`,
         order: { product_name: product.name, total: parseFloat(product.price) * quantity }
       });
 
@@ -352,17 +442,25 @@ function ECommerce() {
     }
   };
 
-  const getPopularProducts = () => {
-    return [...products].sort((a, b) => (b.sales || 0) - (a.sales || 0)).slice(0, 4);
+  const viewProductDetails = (product) => {
+    setSelectedProduct(product);
+    setShowProductModal(true);
   };
 
-  // Handle quantity selection for products
-  const handleQuantityChange = (productId, quantity) => {
-    setQuantitySelectors(prev => ({
-      ...prev,
-      [productId]: quantity
-    }));
-  };
+  // Skeleton loader component
+  const ProductSkeleton = () => (
+    <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
+      <div className="w-full h-48 bg-gray-300"></div>
+      <div className="p-4">
+        <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
+        <div className="h-3 bg-gray-300 rounded w-1/2 mb-4"></div>
+        <div className="flex justify-between">
+          <div className="h-4 bg-gray-300 rounded w-1/4"></div>
+          <div className="h-6 bg-gray-300 rounded w-1/4"></div>
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading && products.length === 0) {
     return (
@@ -377,13 +475,28 @@ function ECommerce() {
 
   return (
     <div className={`min-h-screen pb-20 ${cartVisible ? 'mr-80' : ''} transition-all duration-300`}>
-      {/* Hero Section */}
+      {/* Enhanced Hero Section */}
       <div className="bg-gradient-to-r from-green-600 to-green-800 text-white py-16">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h1 className="text-4xl font-bold mb-4">🌾 Farmers Market Hub</h1>
           <p className="text-xl mb-8 max-w-3xl mx-auto">
             Your one-stop shop for quality agricultural inputs and farm supplies
           </p>
+          
+          {/* Enhanced Search Bar in Hero */}
+          <div className="max-w-2xl mx-auto mb-8">
+            <div className="relative">
+              <FiSearch className="absolute left-4 top-3.5 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="🔍 Search for seeds, fertilizers, tools..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          </div>
+
           <div className="flex gap-4 justify-center">
             <button 
               onClick={() => categories.length > 0 && setSelectedCategory(categories[0].id)}
@@ -407,7 +520,7 @@ function ECommerce() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Enhanced Messages */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg animate-fade-in">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <span className="text-red-400">⚠️</span>
@@ -426,7 +539,7 @@ function ECommerce() {
         )}
 
         {orderMessage && (
-          <div className={`mb-4 p-4 rounded-lg border ${
+          <div className={`mb-4 p-4 rounded-lg border animate-fade-in ${
             orderMessage.type === 'success' 
               ? 'bg-green-50 border-green-200' 
               : orderMessage.type === 'error'
@@ -467,167 +580,209 @@ function ECommerce() {
           </div>
         )}
 
-        {/* Search and Filters */}
+        {/* Enhanced Search and Filters */}
         <div className="mb-8 bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="relative flex-grow">
-              <FiSearch className="absolute left-3 top-3 text-gray-400" />
-              <input
-                type="text"
-                placeholder="🔍 Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <FiFilter className="text-gray-500" />
-              <select
-                value={sortOption}
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                {sortOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.icon} {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="mb-4">
-            <label className="block mb-2 font-medium text-gray-700">
-              💰 Price Range: KSh {priceRange[0].toLocaleString()} - KSh {priceRange[1].toLocaleString()}
-            </label>
-            <div className="flex items-center space-x-4">
-              <input
-                type="range"
-                min="0"
-                max="10000"
-                step="100"
-                value={priceRange[0]}
-                onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              />
-              <input
-                type="range"
-                min="0"
-                max="10000"
-                step="100"
-                value={priceRange[1]}
-                onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Category Tabs */}
-        <div className="flex gap-3 mb-8 overflow-x-auto pb-4 scrollbar-hide">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`px-6 py-3 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center ${
-              !selectedCategory 
-                ? "bg-green-600 text-white shadow-lg" 
-                : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
-            }`}
-          >
-            📦 All Products
-          </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`px-6 py-3 rounded-full text-sm font-medium whitespace-nowrap transition-all flex items-center ${
-                selectedCategory === category.id
-                  ? "bg-green-600 text-white shadow-lg"
-                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {categoryTypes[category.name?.toLowerCase()]?.icon || '📦'} {category.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Product Grid */}
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
-          </div>
-        ) : (
-          <>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">
-                {selectedCategory 
-                  ? `${categories.find(c => c.id === selectedCategory)?.name || 'Selected Category'} Products`
-                  : 'All Products'
-                }
-                <span className="text-green-600 ml-2">({filteredProducts.length})</span>
-              </h3>
-              
-              {/* Cart Summary Button */}
-              <button 
-                onClick={() => setCartVisible(!cartVisible)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                <FiShoppingCart />
-                Cart ({cart.length})
-                <span className="bg-yellow-400 text-green-900 px-2 py-1 rounded text-sm font-bold">
-                  KSh {calculateCartTotal().toLocaleString()}
-                </span>
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-12">
-              {filteredProducts.map((product) => (
-                <EnhancedProductCard 
-                  key={product.id} 
-                  product={product} 
-                  addToCart={addToCart}
-                  placeDirectOrder={placeDirectOrder}
-                  quantitySelectors={quantitySelectors}
-                  onQuantityChange={handleQuantityChange}
-                />
-              ))}
-            </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-                <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-medium text-gray-600 mb-2">No products found</h3>
-                <p className="text-gray-500">Try adjusting your search or filters</p>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Category Filters */}
+            <div className="lg:w-1/4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-800">Categories</h3>
                 <button 
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory(null);
-                    setPriceRange([0, 10000]);
-                  }}
-                  className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="lg:hidden flex items-center text-green-600"
                 >
-                  Reset Filters
+                  <FiFilter className="mr-1" />
+                  {showFilters ? 'Hide' : 'Show'} Filters
                 </button>
               </div>
-            )}
-          </>
-        )}
+              
+              <div className={`space-y-2 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all flex items-center ${
+                    !selectedCategory 
+                      ? "bg-green-600 text-white shadow-lg" 
+                      : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  📦 All Products ({products.length})
+                </button>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all flex items-center ${
+                      selectedCategory === category.id
+                        ? "bg-green-600 text-white shadow-lg"
+                        : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {categoryTypes[category.name?.toLowerCase()]?.icon || '📦'} 
+                    <span className="ml-2">{category.name}</span>
+                    <span className="ml-auto text-xs opacity-75">
+                      ({products.filter(p => p.category_id === category.id).length})
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Price Filter */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h4 className="font-medium text-gray-800 mb-4">💰 Price Range</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">
+                      KSh {priceRange[0].toLocaleString()} - KSh {priceRange[1].toLocaleString()}
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="number"
+                        value={priceRange[0]}
+                        onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                        placeholder="Min"
+                      />
+                      <input
+                        type="number"
+                        value={priceRange[1]}
+                        onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 10000])}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                        placeholder="Max"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10000"
+                    step="100"
+                    value={priceRange[1]}
+                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Products Section */}
+            <div className="lg:w-3/4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    {selectedCategory 
+                      ? `${categories.find(c => c.id === selectedCategory)?.name || 'Selected Category'}`
+                      : 'All Products'
+                    }
+                    <span className="text-green-600 ml-2">({filteredProducts.length})</span>
+                  </h3>
+                  <p className="text-gray-600 text-sm mt-1">
+                    {searchQuery && `Search results for "${searchQuery}"`}
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-4 mt-4 sm:mt-0">
+                  {/* Sort Options */}
+                  <select
+                    value={sortOption}
+                    onChange={(e) => handleSortChange(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    {sortOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.icon} {option.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Cart Summary Button */}
+                  <button 
+                    onClick={() => setCartVisible(!cartVisible)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition relative"
+                  >
+                    <FiShoppingCart />
+                    <span className="hidden sm:inline">Cart</span>
+                    {calculateCartItems() > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {calculateCartItems()}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Product Grid */}
+              {loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <ProductSkeleton key={index} />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-12">
+                    {filteredProducts.map((product) => (
+                      <EnhancedProductCard 
+                        key={product.id} 
+                        product={product} 
+                        addToCart={addToCart}
+                        placeDirectOrder={placeDirectOrder}
+                        viewProductDetails={viewProductDetails}
+                        quantitySelectors={quantitySelectors}
+                      />
+                    ))}
+                  </div>
+
+                  {filteredProducts.length === 0 && (
+                    <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+                      <div className="text-6xl mb-4">🔍</div>
+                      <h3 className="text-xl font-medium text-gray-600 mb-2">No products found</h3>
+                      <p className="text-gray-500 mb-6">Try adjusting your search or filters</p>
+                      <button 
+                        onClick={() => {
+                          setSearchQuery('');
+                          setSelectedCategory(null);
+                          setPriceRange([0, 10000]);
+                        }}
+                        className="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                      >
+                        Reset Filters
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Enhanced Cart Sidebar */}
-        <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
-          cartVisible ? 'translate-x-0' : 'translate-x-full'
-        }`}>
-          <CartSidebar 
-            cart={cart}
-            cartVisible={cartVisible}
-            setCartVisible={setCartVisible}
-            updateQuantity={updateQuantity}
-            removeFromCart={removeFromCart}
-            clearCart={clearCart}
-            calculateCartTotal={calculateCartTotal}
-            handleCheckout={handleCheckout}
-            navigate={navigate}
+        <EnhancedCartSidebar 
+          cart={cart}
+          cartVisible={cartVisible}
+          setCartVisible={setCartVisible}
+          updateQuantity={updateQuantity}
+          removeFromCart={removeFromCart}
+          clearCart={clearCart}
+          calculateCartTotal={calculateCartTotal}
+          calculateCartItems={calculateCartItems}
+          handleCheckout={handleCheckout}
+          navigate={navigate}
+          loading={loading}
+          selectedItems={selectedItems}
+          selectAll={selectAll}
+          toggleItemSelection={toggleItemSelection}
+          toggleSelectAll={toggleSelectAll}
+        />
+
+        {/* Product Details Modal */}
+        {showProductModal && selectedProduct && (
+          <ProductDetailsModal 
+            product={selectedProduct}
+            onClose={() => setShowProductModal(false)}
+            addToCart={addToCart}
+            placeDirectOrder={placeDirectOrder}
           />
-        </div>
+        )}
 
         {/* Mobile Cart Overlay */}
         {cartVisible && (
@@ -642,19 +797,23 @@ function ECommerce() {
 }
 
 // Enhanced Product Card Component
-function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySelectors, onQuantityChange }) {
+function EnhancedProductCard({ product, addToCart, placeDirectOrder, viewProductDetails, quantitySelectors }) {
   const [isHovered, setIsHovered] = useState(false);
   const [quantity, setQuantity] = useState(1);
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
-    setQuantity(1); // Reset quantity after adding
+    setQuantity(1);
   };
 
   const handleQuickOrder = () => {
     placeDirectOrder(product, quantity);
-    setQuantity(1); // Reset quantity after ordering
+    setQuantity(1);
   };
+
+  const finalPrice = product.discount > 0 
+    ? parseFloat(product.price) * (1 - product.discount / 100)
+    : parseFloat(product.price);
 
   return (
     <div 
@@ -664,39 +823,48 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
     >
       <div className="relative">
         <img
-          className="w-full h-48 object-cover transition-transform duration-300"
+          className="w-full h-48 object-cover transition-transform duration-300 hover:scale-105"
           src={product.image || product.img || "/placeholder-product.jpg"}
           alt={product.name}
           onError={(e) => {
-            e.target.src = "/placeholder-product.jpg";
+            e.target.onerror = null;
+            e.target.src = "https://via.placeholder.com/400x200/f3f4f6/6b7280?text=No+Image";
           }}
         />
-        <div className="absolute top-0 left-0 right-0 p-2 flex justify-between">
-          {product.isOrganic && (
-            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-              🌱 Organic
-            </span>
-          )}
+        
+        {/* Badges */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
           {product.discount > 0 && (
-            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
               {product.discount}% OFF
             </span>
           )}
+          {product.is_featured && (
+            <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
+              Featured
+            </span>
+          )}
+          {product.stock_quantity < 10 && product.stock_quantity > 0 && (
+            <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
+              Low Stock
+            </span>
+          )}
         </div>
+
         {isHovered && (
           <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center">
             <div className="flex gap-2">
               <button
                 onClick={handleAddToCart}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition"
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition transform hover:scale-105"
               >
                 🛒 Add to Cart
               </button>
               <button
-                onClick={handleQuickOrder}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                onClick={() => viewProductDetails(product)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition transform hover:scale-105"
               >
-                ⚡ Order Now
+                👁️ View Details
               </button>
             </div>
           </div>
@@ -705,7 +873,12 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
 
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
-          <h3 className="font-semibold text-gray-800 line-clamp-1 text-sm">{product.name}</h3>
+          <h3 
+            className="font-semibold text-gray-800 line-clamp-2 text-sm cursor-pointer hover:text-green-600"
+            onClick={() => viewProductDetails(product)}
+          >
+            {product.name}
+          </h3>
           <div className="flex items-center bg-yellow-50 px-2 py-1 rounded">
             <FiStar className="text-yellow-400 text-xs" />
             <span className="ml-1 text-xs font-medium">{product.rating || "4.5"}</span>
@@ -718,8 +891,8 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
           <div>
             {product.discount > 0 ? (
               <>
-                <span className="text-red-500 font-bold text-lg">
-                  KSh {Math.round(parseFloat(product.price) * (1 - product.discount/100)).toLocaleString()}
+                <span className="text-green-600 font-bold text-lg">
+                  KSh {finalPrice.toLocaleString()}
                 </span>
                 <span className="ml-2 text-sm text-gray-400 line-through">
                   KSh {parseFloat(product.price).toLocaleString()}
@@ -747,7 +920,7 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
             <div className="flex items-center border border-gray-300 rounded-lg">
               <button
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-l-lg"
+                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-l-lg transition"
                 disabled={quantity <= 1}
               >
                 <FiMinus className="h-3 w-3" />
@@ -755,7 +928,7 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
               <span className="px-3 py-1 text-sm font-medium min-w-[40px] text-center">{quantity}</span>
               <button
                 onClick={() => setQuantity(quantity + 1)}
-                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-lg"
+                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-lg transition"
                 disabled={product.stock_quantity > 0 && quantity >= product.stock_quantity}
               >
                 <FiPlus className="h-3 w-3" />
@@ -791,143 +964,661 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, quantitySel
 }
 
 // Enhanced Cart Sidebar Component
-function CartSidebar({ cart, cartVisible, setCartVisible, updateQuantity, removeFromCart, clearCart, calculateCartTotal, handleCheckout, navigate }) {
-  return (
-    <div className="h-full flex flex-col">
-      {/* Cart Header */}
-      <div className="p-6 border-b border-gray-200 bg-green-600 text-white">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold flex items-center">
-            <FiShoppingCart className="h-5 w-5 mr-2" />
-            Shopping Cart ({cart.length})
-          </h2>
-          <button
-            onClick={() => setCartVisible(false)}
-            className="p-2 text-white hover:text-green-100 rounded-lg hover:bg-green-700"
-          >
-            <FiX className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="text-green-100 text-sm mt-1">
-          Total: KSh {calculateCartTotal().toLocaleString()}
-        </p>
-      </div>
+function EnhancedCartSidebar({ 
+  cart, cartVisible, setCartVisible, updateQuantity, removeFromCart, clearCart, 
+  calculateCartTotal, calculateCartItems, handleCheckout, navigate, loading,
+  selectedItems, selectAll, toggleItemSelection, toggleSelectAll 
+}) {
+  const [checkoutStep, setCheckoutStep] = useState('cart'); // 'cart', 'shipping', 'payment', 'review'
+  const [shippingData, setShippingData] = useState({
+    fullName: '',
+    phone: '',
+    address: '',
+    city: '',
+    postalCode: '',
+    deliveryOption: 'home'
+  });
+  const [paymentData, setPaymentData] = useState({
+    method: 'mpesa',
+    cardNumber: '',
+    expiry: '',
+    cvv: ''
+  });
 
-      {/* Cart Items */}
-      <div className="flex-1 overflow-y-auto">
-        {cart.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <FiShoppingCart className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
-            <p className="text-gray-500 mb-6">Add some products to get started.</p>
+  const handleShippingSubmit = (e) => {
+    e.preventDefault();
+    setCheckoutStep('payment');
+  };
+
+  const handlePaymentSubmit = (e) => {
+    e.preventDefault();
+    setCheckoutStep('review');
+  };
+
+  const handleFinalCheckout = async () => {
+    await handleCheckout({
+      shipping_address: `${shippingData.address}, ${shippingData.city}, ${shippingData.postalCode}`,
+      billing_address: `${shippingData.address}, ${shippingData.city}, ${shippingData.postalCode}`,
+      payment_method: paymentData.method,
+      customer_phone: shippingData.phone,
+      customer_name: shippingData.fullName
+    });
+  };
+
+  return (
+    <div className={`fixed top-0 right-0 h-full w-full lg:w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${
+      cartVisible ? 'translate-x-0' : 'translate-x-full'
+    }`}>
+      <div className="h-full flex flex-col">
+        {/* Cart Header */}
+        <div className="p-6 border-b border-gray-200 bg-green-600 text-white">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold flex items-center">
+              <FiShoppingCart className="h-5 w-5 mr-2" />
+              {checkoutStep === 'cart' ? 'Shopping Cart' :
+               checkoutStep === 'shipping' ? 'Shipping Information' :
+               checkoutStep === 'payment' ? 'Payment Method' : 'Order Review'}
+            </h2>
             <button
-              onClick={() => setCartVisible(false)}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition"
+              onClick={() => {
+                setCartVisible(false);
+                setCheckoutStep('cart');
+              }}
+              className="p-2 text-white hover:text-green-100 rounded-lg hover:bg-green-700"
             >
-              Continue Shopping
+              <FiX className="h-5 w-5" />
             </button>
           </div>
-        ) : (
-          <div className="p-4 space-y-4">
-            {cart.map((item) => (
-              <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                <img
-                  src={item.product?.image || item.image || 'https://via.placeholder.com/60x60/f8f9fa/6c757d?text=Product'}
-                  alt={item.product?.name || item.name}
-                  className="w-12 h-12 object-cover rounded"
-                />
-                
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 truncate">
-                    {item.product?.name || item.name}
-                  </h4>
-                  <p className="text-sm text-gray-500">
-                    KSh {parseFloat(item.product?.price || item.price).toLocaleString()} × {item.quantity}
-                  </p>
-                </div>
-                
-                <div className="flex items-center space-x-1">
+          <p className="text-green-100 text-sm mt-1">
+            {checkoutStep === 'cart' ? `${calculateCartItems()} items` :
+             checkoutStep === 'shipping' ? 'Enter your delivery details' :
+             checkoutStep === 'payment' ? 'Choose payment method' : 'Review your order'}
+          </p>
+        </div>
+
+        {/* Cart Content */}
+        <div className="flex-1 overflow-y-auto">
+          {checkoutStep === 'cart' && (
+            <>
+              {cart.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <FiShoppingCart className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
+                  <p className="text-gray-500 mb-6">Add some products to get started.</p>
                   <button
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    className="p-1 text-gray-500 hover:text-gray-700 rounded"
+                    onClick={() => setCartVisible(false)}
+                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition"
                   >
-                    <FiMinus className="h-3 w-3" />
-                  </button>
-                  <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    className="p-1 text-gray-500 hover:text-gray-700 rounded"
-                  >
-                    <FiPlus className="h-3 w-3" />
+                    Continue Shopping
                   </button>
                 </div>
+              ) : (
+                <div className="p-4 space-y-4">
+                  {/* Select All Header */}
+                  <div className="flex items-center justify-between py-2 border-b border-gray-200">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectAll}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Select All</span>
+                    </label>
+                    <span className="text-sm text-gray-500">
+                      {selectedItems.size} of {cart.length} selected
+                    </span>
+                  </div>
+
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                      {/* Selection checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.has(item.id)}
+                        onChange={() => toggleItemSelection(item.id)}
+                        className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500"
+                      />
+                      
+                      <img
+                        src={item.product?.image || item.image || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="60"%3E%3Crect width="100%" height="100%" fill="%23f8f9fa"/%3E%3Ctext x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%236c757d" font-size="10"%3EProduct%3C/text%3E%3C/svg%3E'}
+                        alt={item.product?.name || item.name}
+                        className="w-12 h-12 object-cover rounded"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://via.placeholder.com/60x60/f8f9fa/6c757d?text=No+Image';
+                        }}
+                      />
+                      
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-gray-900 truncate">
+                          {item.product?.name || item.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          KSh {parseFloat(item.product?.price || item.price).toLocaleString()} × {item.quantity}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          className="p-1 text-gray-500 hover:text-gray-700 rounded"
+                        >
+                          <FiMinus className="h-3 w-3" />
+                        </button>
+                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          className="p-1 text-gray-500 hover:text-gray-700 rounded"
+                        >
+                          <FiPlus className="h-3 w-3" />
+                        </button>
+                      </div>
+                      
+                      <button
+                        onClick={() => removeFromCart(item.id)}
+                        className="p-1 text-red-500 hover:text-red-700 rounded"
+                      >
+                        <FiTrash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Shipping Information Step */}
+          {checkoutStep === 'shipping' && (
+            <div className="p-4">
+              <form onSubmit={handleShippingSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={shippingData.fullName}
+                    onChange={(e) => setShippingData({...shippingData, fullName: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={shippingData.phone}
+                    onChange={(e) => setShippingData({...shippingData, phone: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                  <textarea
+                    required
+                    value={shippingData.address}
+                    onChange={(e) => setShippingData({...shippingData, address: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingData.city}
+                      onChange={(e) => setShippingData({...shippingData, city: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                    <input
+                      type="text"
+                      value={shippingData.postalCode}
+                      onChange={(e) => setShippingData({...shippingData, postalCode: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Payment Method Step */}
+          {checkoutStep === 'payment' && (
+            <div className="p-4">
+              <form onSubmit={handlePaymentSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Payment Method *</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="mpesa"
+                        checked={paymentData.method === 'mpesa'}
+                        onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="ml-3 flex items-center">
+                        <span className="text-lg mr-2">📱</span>
+                        MPESA / Mobile Money
+                      </span>
+                    </label>
+                    
+                    <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="card"
+                        checked={paymentData.method === 'card'}
+                        onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="ml-3 flex items-center">
+                        <FiCreditCard className="mr-2" />
+                        Credit/Debit Card
+                      </span>
+                    </label>
+                    
+                    <label className="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="cash"
+                        checked={paymentData.method === 'cash'}
+                        onChange={(e) => setPaymentData({...paymentData, method: e.target.value})}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <span className="ml-3 flex items-center">
+                        <span className="text-lg mr-2">💵</span>
+                        Cash on Delivery
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {paymentData.method === 'card' && (
+                  <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                      <input
+                        type="text"
+                        placeholder="1234 5678 9012 3456"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                        <input
+                          type="text"
+                          placeholder="123"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
+          )}
+
+          {/* Order Review Step */}
+          {checkoutStep === 'review' && (
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-gray-800 mb-2">Shipping Information</h4>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm">{shippingData.fullName}</p>
+                    <p className="text-sm">{shippingData.phone}</p>
+                    <p className="text-sm">{shippingData.address}</p>
+                    <p className="text-sm">{shippingData.city}, {shippingData.postalCode}</p>
+                  </div>
+                </div>
                 
-                <button
-                  onClick={() => removeFromCart(item.id)}
-                  className="p-1 text-red-500 hover:text-red-700 rounded"
-                >
-                  <FiTrash2 className="h-4 w-4" />
-                </button>
+                <div>
+                  <h4 className="font-medium text-gray-800 mb-2">Payment Method</h4>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm capitalize">{paymentData.method} {paymentData.method === 'mpesa' && '(Mobile Money)'}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium text-gray-800 mb-2">Order Summary</h4>
+                  <div className="space-y-2">
+                    {cart.map(item => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span>{item.quantity} × {item.product?.name || item.name}</span>
+                        <span>KSh {(parseFloat(item.product?.price || item.price) * item.quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cart Footer */}
+        {cart.length > 0 && (
+          <div className="border-t border-gray-200 p-6 bg-white">
+            <div className="space-y-4">
+              {checkoutStep === 'cart' && (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm text-gray-600">
+                      <span>Total ({calculateCartItems()} items):</span>
+                      <span>KSh {calculateCartTotal().toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-lg font-semibold">
+                      <span>Selected ({calculateCartItems(true)} items):</span>
+                      <span className="text-green-600">KSh {calculateCartTotal(true).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setCheckoutStep('shipping')}
+                    disabled={selectedItems.size === 0}
+                    className={`w-full py-3 px-4 text-sm font-semibold rounded-lg transition flex items-center justify-center ${
+                      selectedItems.size === 0 
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    <FiCreditCard className="mr-2" />
+                    {selectedItems.size === 0 ? 'Select items to checkout' : 'Proceed to Checkout'}
+                  </button>
+                </>
+              )}
+
+              {checkoutStep === 'shipping' && (
+                <div className="space-y-2">
+                  <button 
+                    type="submit"
+                    onClick={handleShippingSubmit}
+                    className="w-full py-3 px-4 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
+                  >
+                    Continue to Payment
+                  </button>
+                  <button 
+                    onClick={() => setCheckoutStep('cart')}
+                    className="w-full py-2 px-4 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Back to Cart
+                  </button>
+                </div>
+              )}
+
+              {checkoutStep === 'payment' && (
+                <div className="space-y-2">
+                  <button 
+                    type="submit"
+                    onClick={handlePaymentSubmit}
+                    className="w-full py-3 px-4 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
+                  >
+                    Review Order
+                  </button>
+                  <button 
+                    onClick={() => setCheckoutStep('shipping')}
+                    className="w-full py-2 px-4 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Back to Shipping
+                  </button>
+                </div>
+              )}
+
+              {checkoutStep === 'review' && (
+                <div className="space-y-2">
+                  <button 
+                    onClick={handleFinalCheckout}
+                    disabled={loading}
+                    className="w-full py-3 px-4 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <FiCheck className="mr-2" />
+                        Place Order
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => setCheckoutStep('payment')}
+                    className="w-full py-2 px-4 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Back to Payment
+                  </button>
+                </div>
+              )}
+
+              {checkoutStep === 'cart' && (
+                <>
+                  <button
+                    onClick={() => navigate('/user/my-orders')}
+                    className="w-full py-2 px-4 border border-green-600 text-green-600 text-sm font-medium rounded-lg hover:bg-green-50 transition flex items-center justify-center"
+                  >
+                    <FiArrowRight className="mr-2" />
+                    View My Orders
+                  </button>
+                  
+                  <button
+                    onClick={clearCart}
+                    className="w-full py-2 px-4 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition"
+                  >
+                    Clear Cart
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Cart Footer */}
-      {cart.length > 0 && (
-        <div className="border-t border-gray-200 p-6 bg-white">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center text-lg font-semibold">
-              <span>Total:</span>
-              <span className="text-green-600">KSh {calculateCartTotal().toLocaleString()}</span>
+// Product Details Modal Component
+function ProductDetailsModal({ product, onClose, addToCart, placeDirectOrder }) {
+  const [quantity, setQuantity] = useState(1);
+  const [activeImage, setActiveImage] = useState(0);
+
+  const images = [product.image, product.img].filter(Boolean);
+  const finalPrice = product.discount > 0 
+    ? parseFloat(product.price) * (1 - product.discount / 100)
+    : parseFloat(product.price);
+
+  const handleAddToCart = () => {
+    addToCart(product, quantity);
+    onClose();
+  };
+
+  const handleQuickOrder = () => {
+    placeDirectOrder(product, quantity);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <FiX className="h-6 w-6" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Image Gallery */}
+            <div>
+              <div className="relative">
+                <img
+                  src={images[activeImage] || "/placeholder-product.jpg"}
+                  alt={product.name}
+                  className="w-full h-80 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://via.placeholder.com/400x320/f3f4f6/6b7280?text=No+Image';
+                  }}
+                />
+                {product.discount > 0 && (
+                  <span className="absolute top-2 left-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                    {product.discount}% OFF
+                  </span>
+                )}
+              </div>
+              
+              {images.length > 1 && (
+                <div className="flex gap-2 mt-4">
+                  {images.map((img, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setActiveImage(index)}
+                      className={`w-16 h-16 border-2 rounded-lg overflow-hidden ${
+                        activeImage === index ? 'border-green-500' : 'border-gray-300'
+                      }`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            
-            <div className="space-y-2">
-              <button 
-                onClick={async () => {
-                  const shippingAddress = prompt(
-                    '🚚 Please provide your shipping address:',
-                    'Enter your full address including city and postal code'
-                  );
 
-                  if (!shippingAddress || shippingAddress.trim() === '') {
-                    alert('Shipping address is required for placing orders');
-                    return;
-                  }
+            {/* Product Details */}
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-full">
+                    <FiStar className="text-yellow-400 mr-1" />
+                    <span className="font-medium">{product.rating || "4.5"}</span>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    product.stock_quantity > 10 ? 'bg-green-100 text-green-800' : 
+                    product.stock_quantity > 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {product.stock_quantity > 10 ? 'In Stock' : 
+                     product.stock_quantity > 0 ? 'Low Stock' : 'Out of Stock'}
+                  </span>
+                </div>
 
-                  const orderData = {
-                    shipping_address: shippingAddress.trim(),
-                    billing_address: shippingAddress.trim(),
-                    payment_method: 'cash_on_delivery',
-                  };
+                <div className="mb-4">
+                  {product.discount > 0 ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl font-bold text-green-600">
+                        KSh {finalPrice.toLocaleString()}
+                      </span>
+                      <span className="text-xl text-gray-400 line-through">
+                        KSh {parseFloat(product.price).toLocaleString()}
+                      </span>
+                      <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-bold">
+                        Save {product.discount}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-3xl font-bold text-green-600">
+                      KSh {parseFloat(product.price).toLocaleString()}
+                    </span>
+                  )}
+                </div>
 
-                  await handleCheckout(orderData);
-                }}
-                className="w-full py-3 px-4 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition flex items-center justify-center"
-              >
-                <FiCreditCard className="mr-2" />
-                Proceed to Checkout
-              </button>
-              
-              <button
-                onClick={() => navigate('/user/my-orders')}
-                className="w-full py-2 px-4 border border-green-600 text-green-600 text-sm font-medium rounded-lg hover:bg-green-50 transition flex items-center justify-center"
-              >
-                <FiArrowRight className="mr-2" />
-                View My Orders
-              </button>
-              
-              <button
-                onClick={clearCart}
-                className="w-full py-2 px-4 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition"
-              >
-                Clear Cart
-              </button>
+                <p className="text-gray-700 leading-relaxed">{product.description}</p>
+              </div>
+
+              {/* Specifications */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-900">Specifications</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {product.brand && (
+                    <div>
+                      <span className="text-gray-600">Brand:</span>
+                      <span className="ml-2 font-medium">{product.brand}</span>
+                    </div>
+                  )}
+                  {product.weight && (
+                    <div>
+                      <span className="text-gray-600">Weight:</span>
+                      <span className="ml-2 font-medium">{product.weight}</span>
+                    </div>
+                  )}
+                  {product.dimensions && (
+                    <div>
+                      <span className="text-gray-600">Dimensions:</span>
+                      <span className="ml-2 font-medium">{product.dimensions}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-600">SKU:</span>
+                    <span className="ml-2 font-medium">#{product.id}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity and Actions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-gray-700 font-medium">Quantity:</span>
+                  <div className="flex items-center border border-gray-300 rounded-lg">
+                    <button
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-l-lg"
+                      disabled={quantity <= 1}
+                    >
+                      <FiMinus className="h-4 w-4" />
+                    </button>
+                    <span className="px-4 py-2 font-medium min-w-[50px] text-center">{quantity}</span>
+                    <button
+                      onClick={() => setQuantity(quantity + 1)}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-r-lg"
+                      disabled={product.stock_quantity > 0 && quantity >= product.stock_quantity}
+                    >
+                      <FiPlus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleAddToCart}
+                    disabled={product.stock_quantity <= 0}
+                    className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <FiShoppingCart className="mr-2" />
+                    Add to Cart
+                  </button>
+                  
+                  {product.stock_quantity > 0 && (
+                    <button
+                      onClick={handleQuickOrder}
+                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+                    >
+                      <FiPackage className="mr-2" />
+                      Buy Now
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
