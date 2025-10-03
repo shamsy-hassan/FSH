@@ -44,11 +44,12 @@ function Sacco() {
     description: ''
   });
 
-  const regions = ['North', 'South', 'East', 'West', 'Central'];
+  const [regions, setRegions] = useState([]);
 
   useEffect(() => {
     fetchSaccos();
     fetchMyData();
+    fetchRegions();
   }, [selectedRegion]);
 
   // Debounced search
@@ -90,6 +91,18 @@ function Sacco() {
       console.error('Error fetching user data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch regions from API
+  const fetchRegions = async () => {
+    try {
+      const data = await agriConnectAPI.agroclimate.getRegions();
+      setRegions(data.regions || []);
+    } catch (err) {
+      console.error('Error fetching regions:', err);
+      // Fallback to empty array if API fails
+      setRegions([]);
     }
   };
 
@@ -1037,7 +1050,7 @@ function Sacco() {
           >
             <option value="">All Regions</option>
             {regions.map(region => (
-              <option key={region} value={region}>{region}</option>
+              <option key={region.id} value={region.name}>{region.name}</option>
             ))}
           </select>
           

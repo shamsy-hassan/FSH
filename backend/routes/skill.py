@@ -156,3 +156,35 @@ def add_skill_video():
         print("DEBUG: Error during video creation:", str(e))
         db.session.rollback()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+@skill_bp.route('/videos/<int:video_id>', methods=['DELETE'])
+@jwt_required()
+def delete_skill_video(video_id):
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    try:
+        # Find the video
+        video = SkillVideo.query.get_or_404(video_id)
+        
+        # If it's a file upload (not a URL), delete the file
+        if video.video_url and video.video_url.startswith('/static/uploads/'):
+            import os
+            file_path = os.path.join(current_app.static_folder, 'uploads', os.path.basename(video.video_url))
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"DEBUG: Deleted file: {file_path}")
+        
+        # Delete the video record
+        db.session.delete(video)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Video deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"DEBUG: Error deleting video: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': f'Error deleting video: {str(e)}'}), 500

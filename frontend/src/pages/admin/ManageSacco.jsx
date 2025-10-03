@@ -24,7 +24,7 @@ function ManageSacco() {
   const [saccoMembers, setSaccoMembers] = useState([]);
   const [currentSaccoId, setCurrentSaccoId] = useState(null);
 
-  const regions = ['North', 'South', 'East', 'West', 'Central'];
+  const [regions, setRegions] = useState([]);
 
   // SACCO Creation/Edit Form State
   const [saccoForm, setSaccoForm] = useState({
@@ -45,7 +45,20 @@ function ManageSacco() {
 
   useEffect(() => {
     fetchSaccos();
+    fetchRegions();
   }, [selectedRegion]);
+
+  // Fetch regions from API
+  const fetchRegions = async () => {
+    try {
+      const data = await agriConnectAPI.agroclimate.getRegions();
+      setRegions(data.regions || []);
+    } catch (err) {
+      console.error('Error fetching regions:', err);
+      // Fallback to empty array if API fails
+      setRegions([]);
+    }
+  };
 
   // Fetch ALL loan applications for admin view (across all SACCOs)
   const fetchAllLoanApplications = async () => {
@@ -81,7 +94,10 @@ function ManageSacco() {
   const fetchSaccos = async () => {
     try {
       setLoading(true);
-      const data = await agriConnectAPI.sacco.getSaccos(selectedRegion || null);
+      const params = {
+        region: selectedRegion || null
+      };
+      const data = await agriConnectAPI.sacco.getSaccos(params);
       setSaccos(data.saccos || []);
     } catch (err) {
       setError('Failed to fetch SACCOs');
@@ -770,8 +786,8 @@ function ManageSacco() {
                 >
                   <option value="">Select Region</option>
                   {regions.map((region) => (
-                    <option key={region} value={region}>
-                      {region}
+                    <option key={region.id} value={region.name}>
+                      {region.name}
                     </option>
                   ))}
                 </select>

@@ -753,10 +753,15 @@ async handleResponse(response) {
     // SACCO API calls
 sacco = {
         // Get all SACCOS with optional region filtering
-    getSaccos: async (region = null, page = 1, perPage = 20) => {
+    getSaccos: async (params = {}) => {
+        const { region, search, page = 1, perPage = 20 } = params;
+        
         let url = `${API_BASE_URL}/sacco/saccos?page=${page}&per_page=${perPage}`;
         if (region) {
-            url += `&region=${region}`;
+            url += `&region=${encodeURIComponent(region)}`;
+        }
+        if (search) {
+            url += `&search=${encodeURIComponent(search)}`;
         }
 
         const response = await fetch(url, {
@@ -1173,6 +1178,16 @@ agroclimate = {
                 method: 'POST',
                 headers: headers,
                 body: isFormData ? videoData : JSON.stringify(videoData),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Delete skill video (admin only)
+        deleteSkillVideo: async (videoId) => {
+            const response = await fetch(`${API_BASE_URL}/skill/videos/${videoId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders(),
             });
 
             return await this.handleResponse(response);

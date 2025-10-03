@@ -228,6 +228,18 @@ export default function ManageSkills() {
     }
   };
 
+  const handleDeleteVideo = async (videoId, videoTitle) => {
+    if (!window.confirm(`Are you sure you want to delete the video "${videoTitle}"?`)) return;
+    try {
+      await agriConnectAPI.skill.deleteSkillVideo(videoId);
+      await fetchSkills(); // Refresh to update the video list
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete video');
+      console.error("Delete video error:", err);
+    }
+  };
+
   const handleToggleSkillStatus = async (skill) => {
     try {
       const updatedData = { ...skill, is_active: !skill.is_active };
@@ -621,13 +633,41 @@ export default function ManageSkills() {
                           <FiPlay className="w-8 h-8 text-gray-800" />
                         </div>
                       </div>
+
+                      {/* Delete Button */}
+                      <div className="absolute top-2 right-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteVideo(video.id, video.title);
+                          }}
+                          className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-colors"
+                          title="Delete video"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4">
-                      <h4 className="font-semibold text-gray-800 mb-2">{video.title}</h4>
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-semibold text-gray-800 flex-1">{video.title}</h4>
+                      </div>
                       <p className="text-sm text-gray-600">Skill: {video.skillTitle}</p>
-                      <div className="mt-2 flex items-center text-blue-600 text-sm">
-                        <FiPlay className="w-4 h-4 mr-1" />
-                        <span>Click to watch</span>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center text-blue-600 text-sm">
+                          <FiPlay className="w-4 h-4 mr-1" />
+                          <span>Click to watch</span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteVideo(video.id, video.title);
+                          }}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Delete video"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </motion.div>
