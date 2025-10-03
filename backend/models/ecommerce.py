@@ -45,6 +45,8 @@ class Product(db.Model):
     weight = db.Column(db.Float)
     dimensions = db.Column(db.String(50))
     is_active = db.Column(db.Boolean, default=True)
+    discount = db.Column(db.Float, default=0.0)  # Discount percentage (0-100)
+    is_featured = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
@@ -73,6 +75,8 @@ class Product(db.Model):
             'weight': self.weight,
             'dimensions': self.dimensions,
             'is_active': self.is_active,
+            'discount': self.discount,
+            'is_featured': self.is_featured,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

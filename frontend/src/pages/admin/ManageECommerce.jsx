@@ -207,8 +207,26 @@ const ManageECommerce = () => {
       setError(null);
       setLoading(true);
       
-      const formData = new FormData();
       const productData = editingProduct || newProduct;
+      
+      // Frontend validation
+      if (!productData.name || !productData.name.trim()) {
+        setError('Product name is required');
+        setLoading(false);
+        return;
+      }
+      if (!productData.price || parseFloat(productData.price) <= 0) {
+        setError('Please enter a valid price');
+        setLoading(false);
+        return;
+      }
+      if (!productData.category_id) {
+        setError('Please select a category');
+        setLoading(false);
+        return;
+      }
+      
+      const formData = new FormData();
       
       Object.keys(productData).forEach(key => {
         if (key === 'image' && productData.image) {
@@ -250,6 +268,59 @@ const ManageECommerce = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.message || (editingProduct ? 'Failed to update product' : 'Failed to create product'));
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const formData = new FormData();
+      const categoryData = editingCategory || newCategory;
+      
+      // Validate required fields
+      if (!categoryData.name || !categoryData.name.trim()) {
+        setError('Category name is required');
+        return;
+      }
+      
+      Object.keys(categoryData).forEach(key => {
+        if (key === 'image' && categoryData.image) {
+          formData.append('image', categoryData.image);
+        } else if (key !== 'imagePreview' && key !== 'id' && categoryData[key] !== null && categoryData[key] !== undefined) {
+          formData.append(key, categoryData[key]);
+        }
+      });
+
+      if (editingCategory) {
+        // Update existing category
+        await agriConnectAPI.ecommerce.updateCategory(editingCategory.id, formData);
+        setSuccess('Category updated successfully!');
+      } else {
+        // Create new category
+        await agriConnectAPI.ecommerce.createCategory(formData);
+        setSuccess('Category created successfully!');
+      }
+      
+      setNewCategory({
+        name: '',
+        type: '',
+        description: '',
+        image: null,
+        imagePreview: ''
+      });
+      
+      setEditingCategory(null);
+      setShowCategoryForm(false);
+      fetchCategories();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message || (editingCategory ? 'Failed to update category' : 'Failed to create category'));
       setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
@@ -922,8 +993,114 @@ const ManageECommerce = () => {
         </div>
       )}
 
-      {/* Category Form Modal remains the same */}
-      {/* ... */}
+      {/* Category Form Modal */}
+      {showCategoryForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {editingCategory ? 'Edit Category' : 'Add New Category'}
+              </h2>
+              <button
+                onClick={resetForms}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FiX size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateCategory} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Name *</label>
+                <input
+                  type="text"
+                  value={editingCategory ? editingCategory.name : newCategory.name}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, name: e.target.value})
+                    : setNewCategory({...newCategory, name: e.target.value})
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Enter category name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Type</label>
+                <select
+                  value={editingCategory ? editingCategory.type : newCategory.type}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, type: e.target.value})
+                    : setNewCategory({...newCategory, type: e.target.value})
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Select Type</option>
+                  <option value="seeds">Seeds</option>
+                  <option value="fertilizers">Fertilizers</option>
+                  <option value="tools">Tools</option>
+                  <option value="equipment">Equipment</option>
+                  <option value="pesticides">Pesticides</option>
+                  <option value="irrigation">Irrigation</option>
+                  <option value="organic">Organic Products</option>
+                  <option value="livestock">Livestock Supplies</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={editingCategory ? editingCategory.description : newCategory.description}
+                  onChange={(e) => editingCategory 
+                    ? setEditingCategory({...editingCategory, description: e.target.value})
+                    : setNewCategory({...newCategory, description: e.target.value})
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Enter category description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category Image</label>
+                <input
+                  type="file"
+                  onChange={(e) => handleImageChange(e, 'category')}
+                  accept="image/*"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                {((editingCategory && editingCategory.imagePreview) || newCategory.imagePreview) && (
+                  <div className="mt-2">
+                    <img
+                      src={editingCategory ? editingCategory.imagePreview : newCategory.imagePreview}
+                      alt="Category preview"
+                      className="w-32 h-32 object-cover rounded-md border"
+                    />
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={resetForms}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : (editingCategory ? 'Update Category' : 'Add Category')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

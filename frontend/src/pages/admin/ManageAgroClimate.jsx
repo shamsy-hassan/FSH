@@ -48,15 +48,23 @@ function ManageAgroClimate() {
                  'July', 'August', 'September', 'October', 'November', 'December'];
 
   useEffect(() => {
+    console.log('DEBUG: Initial useEffect - fetching regions');
     fetchRegions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    console.log('DEBUG: Region/season change useEffect triggered');
+    console.log('DEBUG: regions.data.length:', regions.data.length);
+    console.log('DEBUG: selectedRegion:', selectedRegion);
+    console.log('DEBUG: selectedSeason:', selectedSeason);
+    
     // trigger recommendations when selection or regions data changes
     if (regions.data.length > 0) {
+      console.log('DEBUG: Calling fetchRecommendations because regions data exists');
       fetchRecommendations();
     } else {
+      console.log('DEBUG: Clearing recommendations because no regions');
       // clear recommendations if no regions
       setCropRecommendations([]);
     }
@@ -110,20 +118,30 @@ function ManageAgroClimate() {
       setLoading(true);
       let allRecommendations = [];
       
+      console.log('DEBUG: fetchRecommendations called');
+      console.log('DEBUG: selectedRegion:', selectedRegion);
+      console.log('DEBUG: selectedSeason:', selectedSeason);
+      console.log('DEBUG: regions.data:', regions.data);
+      
       if (selectedRegion) {
+        console.log('DEBUG: Fetching for specific region:', selectedRegion);
         const data = await agriConnectAPI.agroclimate.getCropRecommendations(
           parseInt(selectedRegion),
           selectedSeason || null
         );
+        console.log('DEBUG: API response for specific region:', data);
         allRecommendations = data.recommendations || [];
       } else {
+        console.log('DEBUG: Fetching for all regions');
         // batch fetch for all regions (graceful: ignore per-region errors)
         for (const region of regions.data) {
           try {
+            console.log(`DEBUG: Fetching for region ${region.id} (${region.name})`);
             const data = await agriConnectAPI.agroclimate.getCropRecommendations(
               region.id,
               selectedSeason || null
             );
+            console.log(`DEBUG: API response for region ${region.id}:`, data);
             allRecommendations = [...allRecommendations, ...(data.recommendations || [])];
           } catch (err) {
             console.error(`Error fetching recommendations for region ${region.id}:`, err);
@@ -131,6 +149,7 @@ function ManageAgroClimate() {
         }
       }
       
+      console.log('DEBUG: Final allRecommendations:', allRecommendations);
       setCropRecommendations(allRecommendations);
       setError(null);
     } catch (err) {
@@ -203,7 +222,9 @@ function ManageAgroClimate() {
   const createRecommendation = async (e) => {
     e.preventDefault();
     try {
+      console.log('DEBUG: Creating recommendation with data:', newRecommendation);
       await agriConnectAPI.agroclimate.createCropRecommendation(newRecommendation);
+      console.log('DEBUG: Recommendation created successfully');
       setNewRecommendation({
         region_id: '',
         crop_name: '',
@@ -216,6 +237,7 @@ function ManageAgroClimate() {
         description: ''
       });
       setShowRecommendationForm(false);
+      console.log('DEBUG: About to call fetchRecommendations after creation');
       fetchRecommendations();
       setError(null);
     } catch (err) {

@@ -4,7 +4,7 @@
 FSH is a full-stack agricultural platform connecting farmers, suppliers, and admins through market trading, SACCO (savings & credit cooperatives), agro-climate data, storage solutions, and skill development.
 
 **Tech Stack:** Flask/SQLAlchemy backend + React 19/Vite frontend
-**Authentication:** Dual-role JWT system (user/admin) with role-based routing
+**Authentication:** Dual-role JWT system (user/admin) with role-based routing  
 **Database:** SQLite (dev) with relationship-heavy SQLAlchemy models
 **API Pattern:** RESTful with consistent `/api/{module}` prefixes
 **UI Framework:** Material-UI v7 + Tailwind CSS v4 + Framer Motion for animations
@@ -31,7 +31,7 @@ npm run dev
 ### Database Operations
 - Always wrap direct model operations: `with app.app_context():`
 - Test scripts available: `test_sacco_creation.py`, `direct_sacco_test.py`
-- Manual testing credentials: `admin@famar.com/admin123` (auto-created on first run)
+- Manual testing credentials: `admin@agriconnect.com/admin123` (auto-created on first run)
 
 ## Critical Architecture Patterns
 
@@ -47,7 +47,7 @@ user_id = identity['id']
 is_admin = identity['type'] == 'admin'
 ```
 
-**CONSISTENT:** All routes now use `json.loads(get_jwt_identity())` pattern correctly.
+**CONSISTENT:** All routes consistently use `json.loads(get_jwt_identity())` pattern with conditional parsing for string/dict.
 
 ### Frontend API Integration
 - **Centralized Service:** All API calls through `AgriConnectAPI` class in `services/api.js`
@@ -136,7 +136,7 @@ if identity['type'] != 'admin':
 
 ## Testing Approach
 - Manual integration tests via scripts in backend root
-- Test user credentials: `admin@famar.com/admin123`
+- Test user credentials: `admin@agriconnect.com/admin123`
 - No formal test suite - use direct API calls or model testing scripts
 - Database testing: Use `with app.app_context():` pattern from test scripts
 
@@ -163,7 +163,7 @@ cd frontend && npm install && npm run dev
 ### Testing Patterns
 - **Manual Integration:** Use scripts like `test_sacco_creation.py` in backend root
 - **API Testing:** Direct HTTP calls to `localhost:5000/api/{endpoint}`
-- **Admin Credentials:** `admin@famar.com/admin123` (auto-created on first run)
+- **Admin Credentials:** `admin@agriconnect.com/admin123` (auto-created on first run)
 - **Database Testing:** Always wrap with `with app.app_context():` for direct model operations
 
 ---

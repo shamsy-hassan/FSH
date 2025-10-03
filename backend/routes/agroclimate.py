@@ -201,3 +201,18 @@ def create_crop_recommendation():
         'message': 'Crop recommendation created successfully',
         'recommendation': recommendation.to_dict()
     }), 201
+
+@agroclimate_bp.route('/crop-recommendations/<int:recommendation_id>', methods=['DELETE'])
+@jwt_required()
+def delete_crop_recommendation(recommendation_id):
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    recommendation = CropRecommendation.query.get_or_404(recommendation_id)
+    db.session.delete(recommendation)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Crop recommendation deleted successfully'
+    }), 200

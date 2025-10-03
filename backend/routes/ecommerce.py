@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.ecommerce import Category, Product, Cart, CartItem
+from models.order import OrderItem  # Add missing import
 from extensions import db
 from werkzeug.utils import secure_filename
 import os
@@ -308,34 +309,82 @@ def create_product():
         user_type = identity.get('type')
         if user_type != 'admin':
             return jsonify({'message': 'Admin access required'}), 403
+        
         data = request.form
         file = request.files.get('image')
-        # Validate required fields
+        
+        print(f"DEBUG: Received form data keys: {list(data.keys())}")
+        print(f"DEBUG: Form data values: {dict(data)}")
+        
+        # Validate required fields with detailed debugging
         required_fields = ['name', 'price', 'category_id']
         for field in required_fields:
-            if field not in data or not data[field]:
+            if field not in data:
+                print(f"DEBUG: Missing field: {field}")
                 return jsonify({'message': f'{field.replace("_", " ").title()} is required'}), 400
+            if not data[field] or data[field].strip() == '':
+                print(f"DEBUG: Empty field: {field} = '{data[field]}'")
+                return jsonify({'message': f'{field.replace("_", " ").title()} cannot be empty'}), 400
+            print(f"DEBUG: Valid field: {field} = '{data[field]}'")
+        
+        # Check if category exists
+        try:
+            category_id = int(data['category_id'])
+            from models.ecommerce import Category
+            category = Category.query.get(category_id)
+            if not category:
+                print(f"DEBUG: Category not found: {category_id}")
+                return jsonify({'message': f'Category with ID {category_id} does not exist'}), 400
+            print(f"DEBUG: Category found: {category.name}")
+        except ValueError:
+            print(f"DEBUG: Invalid category_id format: '{data['category_id']}'")
+            return jsonify({'message': 'Category ID must be a valid number'}), 400
+        
         image_path = save_image(file) if file else None
+        print(f"DEBUG: Image path: {image_path}")
+        
+        # Convert data with error handling
+        try:
+            price = float(data['price'])
+            stock_quantity = int(data.get('stock_quantity', 0) or 0)
+            weight = float(data['weight']) if data.get('weight') and data.get('weight').strip() else None
+            discount = float(data.get('discount', 0) or 0)
+            print(f"DEBUG: Converted values - price: {price}, stock: {stock_quantity}, weight: {weight}, discount: {discount}")
+        except ValueError as ve:
+            print(f"DEBUG: Value conversion error: {ve}")
+            return jsonify({'message': f'Invalid number format: {str(ve)}'}), 400
+        
         product = Product(
             name=data['name'],
             description=data.get('description', ''),
-            price=float(data['price']),
-            category_id=int(data['category_id']),
-            stock_quantity=int(data.get('stock_quantity', 0)),
+            price=price,
+            category_id=category_id,
+            stock_quantity=stock_quantity,
             image=image_path,
             brand=data.get('brand', ''),
-            weight=float(data['weight']) if data.get('weight') else None,
+            weight=weight,
             dimensions=data.get('dimensions', ''),
-            is_active=data.get('is_active', 'true').lower() == 'true'
+            is_active=data.get('is_active', 'true').lower() == 'true',
+            discount=discount,
+            is_featured=data.get('is_featured', 'false').lower() == 'true'
         )
+        
+        print(f"DEBUG: Product object created successfully")
+        
         db.session.add(product)
         db.session.commit()
+        
+        print(f"DEBUG: Product saved to database with ID: {product.id}")
+        
         return jsonify({
             'product': product.to_dict(),
             'message': 'Product created successfully'
         }), 201
     except Exception as e:
         db.session.rollback()
+        print(f"DEBUG: Exception in create_product: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': f'Error creating product: {str(e)}'}), 500
 
 @ecommerce_bp.route('/products/<int:product_id>', methods=['PUT'])
@@ -370,6 +419,10 @@ def update_product(product_id):
             product.dimensions = data['dimensions']
         if 'is_active' in data:
             product.is_active = data['is_active'].lower() == 'true'
+        if 'discount' in data:
+            product.discount = float(data['discount'])
+        if 'is_featured' in data:
+            product.is_featured = data['is_featured'].lower() == 'true'
         
         if file:
             product.image = save_image(file)

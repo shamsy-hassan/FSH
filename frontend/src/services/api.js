@@ -777,36 +777,6 @@ sacco = {
         return await this.handleResponse(response);
     },
 
-    // Create SACCO (admin only)
-    createSacco: async (saccoData) => {
-        if (!this.isAdmin()) {
-            throw new Error('Admin access required');
-        }
-
-        const response = await fetch(`${API_BASE_URL}/sacco/saccos`, {
-            method: 'POST',
-            headers: this.getHeaders(),
-            body: JSON.stringify(saccoData),
-        });
-
-        return await this.handleResponse(response);
-    },
-
-    // Update SACCO (admin only)
-    updateSacco: async (saccoId, saccoData) => {
-        if (!this.isAdmin()) {
-            throw new Error('Admin access required');
-        }
-
-        const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
-            method: 'PUT',
-            headers: this.getHeaders(),
-            body: JSON.stringify(saccoData),
-        });
-
-        return await this.handleResponse(response);
-    },
-
     // Delete SACCO (admin only)
     deleteSacco: async (saccoId) => {
         if (!this.isAdmin()) {
@@ -823,6 +793,10 @@ sacco = {
 
     // Create a new SACCO (admin only)
     createSacco: async (formData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
         const response = await fetch(`${API_BASE_URL}/sacco/saccos`, {
             method: 'POST',
             headers: {
@@ -836,6 +810,10 @@ sacco = {
 
     // Update SACCO (admin only)
     updateSacco: async (saccoId, formData) => {
+        if (!this.isAdmin()) {
+            throw new Error('Admin access required');
+        }
+
         const response = await fetch(`${API_BASE_URL}/sacco/saccos/${saccoId}`, {
             method: 'PUT',
             headers: {

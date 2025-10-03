@@ -94,6 +94,7 @@ function ManageSacco() {
   const handleCreateOrUpdateSacco = async (e) => {
     e.preventDefault();
     setIsCreatingSacco(true);
+    setError(null); // Clear any previous errors
 
     try {
       const formData = new FormData();
@@ -114,19 +115,38 @@ function ManageSacco() {
         setSuccess('SACCO created successfully! It will be visible to users within 5 minutes.');
       }
 
+      // If we get here, the operation was successful
       resetForm();
       setShowCreateSaccoModal(false);
       setShowEditSaccoModal(false);
-      fetchSaccos();
 
       setTimeout(() => {
         setSuccess(null);
       }, 5000);
     } catch (err) {
-      setError(editingSacco ? 'Failed to update SACCO' : 'Failed to create SACCO. Please check your input and try again.');
-      console.error('Error:', err);
+      console.error('SACCO operation error:', err);
+      
+      // Extract specific error message from the response
+      let errorMessage;
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.response && err.response.data && err.response.data.message) {
+        errorMessage = err.response.data.message;
+      } else {
+        errorMessage = editingSacco ? 'Failed to update SACCO' : 'Failed to create SACCO. Please check your input and try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsCreatingSacco(false);
+    }
+
+    // Refresh the SACCOs list separately to avoid showing error if SACCO creation succeeded
+    try {
+      await fetchSaccos();
+    } catch (fetchError) {
+      console.error('Error refreshing SACCOs list:', fetchError);
+      // Don't show error to user for list refresh failure
     }
   };
 
