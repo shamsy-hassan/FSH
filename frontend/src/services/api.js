@@ -89,7 +89,15 @@ async handleResponse(response) {
             return await this.auth.login(username, password, 'admin');
         },
 
-                // Get user profile\n        getProfile: async () => {\n            const response = await fetch(`${API_BASE_URL}/auth/profile`, {\n                method: 'GET',\n                headers: this.getHeaders(),\n            });\n\n            return await this.handleResponse(response);\n        },\n\n        // Logout user\n        logout: async () => {\n            const response = await fetch(`${API_BASE_URL}/auth/logout`, {\n                method: 'POST',\n                headers: this.getHeaders(),\n            });\n\n            // Clear local storage\n            localStorage.removeItem('agriConnectToken');\n            localStorage.removeItem('agriConnectUserType');\n            localStorage.removeItem('agriConnectUserId');\n            \n            // Reset instance variables\n            this.token = null;\n            this.userType = null;\n            this.userId = null;\n\n            return await this.handleResponse(response);\n        },
+        // Get user profile
+        getProfile: async () => {
+            const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
 
         // Logout user
         logout: async () => {
@@ -109,18 +117,6 @@ async handleResponse(response) {
             this.userId = null;
 
             return await this.handleResponse(response);
-        },
-
-        // Logout
-        logout: () => {
-            localStorage.removeItem('agriConnectToken');
-            localStorage.removeItem('agriConnectUserType');
-            localStorage.removeItem('agriConnectUserId');
-            
-            // Update class instance
-            this.token = null;
-            this.userType = null;
-            this.userId = null;
         },
     };
 

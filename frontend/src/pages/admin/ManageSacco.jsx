@@ -1067,8 +1067,8 @@ function ManageSacco() {
                     >
                       <option value="">All Regions</option>
                       {regions.map((region) => (
-                        <option key={region} value={region}>
-                          {region}
+                        <option key={region.id || region.name || region} value={region.name || region}>
+                          {region.name || region}
                         </option>
                       ))}
                     </select>

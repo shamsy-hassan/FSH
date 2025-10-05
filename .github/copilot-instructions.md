@@ -7,7 +7,7 @@ FSH is a full-stack agricultural platform connecting farmers, suppliers, and adm
 **Authentication:** Dual-role JWT system (user/admin) with role-based routing  
 **Database:** SQLite (dev) with relationship-heavy SQLAlchemy models
 **API Pattern:** RESTful with consistent `/api/{module}` prefixes
-**UI Framework:** Material-UI v7 + Tailwind CSS v4 + Framer Motion for animations
+**UI Framework:** Material-UI v6, Tailwind CSS v4, Framer Motion for animations
 **Python Version:** 3.12+ required for backend development
 
 ## Quick Start
@@ -49,6 +49,18 @@ is_admin = identity['type'] == 'admin'
 
 **CONSISTENT:** All routes consistently use `json.loads(get_jwt_identity())` pattern with conditional parsing for string/dict.
 
+### Frontend Component Patterns
+- **Page Structure:** Consistent page layout with header, stats cards, tabs, and content sections
+- **Animation Patterns:** Use `motion.div` with `initial/animate/exit` for page transitions and card hover effects
+- **State Management:** Local state + `useEffect` for data fetching, auto-refresh patterns (30s intervals)
+- **Modal Patterns:** Overlay modals with `AnimatePresence` for forms and detailed interactions
+- **Card Components:** Reusable card patterns with view mode toggle (grid/list), status badges, action buttons
+- **Loading States:** Consistent loading spinners with gradient backgrounds and descriptive text
+- **Empty States:** Standardized empty state components with icons, titles, descriptions, and call-to-action buttons
+- **Form Handling:** Multi-step forms with validation, file uploads via FormData (not JSON)
+- **Toast Notifications:** `react-toastify` for success/error feedback on user actions
+- **Real-time Updates:** Auto-sync with admin actions (approval status changes trigger notifications)
+
 ### Frontend API Integration
 - **Centralized Service:** All API calls through `AgriConnectAPI` class in `services/api.js`
 - **Token Management:** Auto-attached from localStorage in `getHeaders()`
@@ -56,7 +68,7 @@ is_admin = identity['type'] == 'admin'
 - **State Persistence:** `agriConnectToken`, `agriConnectUser`, `agriConnectUserType` in localStorage
 - **UI Components:** Material-UI components with Tailwind utility classes
 - **Animations:** Framer Motion for page transitions and micro-interactions
-- **Icons:** Mix of React Icons (Fi* prefix) and Heroicons - prefer React Icons for consistency
+- **Icons:** React Icons (Fi* prefix) preferred - consistent across all components
 
 ### Route Structure
 - **Backend Blueprints:** Each domain has `routes/{module}.py` with `{module}_bp`
@@ -111,6 +123,22 @@ is_admin = identity['type'] == 'admin'
 
 **Note:** The codebase consistently uses the JSON pattern - inconsistent usage has been resolved.
 
+### API Service Issues
+❌ **Wrong:** Corrupted auth methods with embedded `\n` characters
+✅ **Correct:** Ensure auth object has proper `getProfile()` method for AuthContext initialization
+- **AuthContext expects:** `agriConnectAPI.auth.getProfile()` to exist
+- **Service pattern:** All auth methods should be properly formatted without string escapes
+
+### React Component Issues  
+❌ **Wrong:** Using objects as React children or keys
+```jsx
+{regions.map(region => <option key={region}>{region}</option>)}
+```
+✅ **Correct:** Extract primitive values for keys and content
+```jsx
+{regions.map(region => <option key={region.id || region.name}>{region.name}</option>)}
+```
+
 ### Registration Data Structure
 - **Frontend sends:** `{user: {...}, profile: {...}}` nested format
 - **Backend handles:** Both nested and flat structures for backward compatibility
@@ -145,8 +173,25 @@ if identity['type'] != 'admin':
 - **API Client:** `frontend/src/services/api.js` - all endpoint definitions and token handling  
 - **Auth Flow:** `backend/routes/auth.py` + `frontend/src/contexts/AuthContext.jsx`
 - **Model Relationships:** Start with `backend/models/user.py` to see entity connections
+- **Protected Routes:** `frontend/src/components/ProtectedRoute.jsx` - role-based access control
+- **Layout System:** `frontend/src/components/Layout.jsx` - conditional admin/user layouts
+- **Component Examples:** `frontend/src/pages/user/MyMarket.jsx` - comprehensive CRUD patterns
 - **Admin UI:** `frontend/src/pages/admin/` - role-specific interface patterns
-- **Frontend Dependencies:** React 19, Material-UI v7, Tailwind v4, Framer Motion, React Router v7
+- **Frontend Dependencies:** React 19, Material-UI v6, Tailwind v4, Framer Motion, React Router v7
+
+## Current Issues & Notes
+- **Routes Directory:** Typo in `/backend/routes/__nit__.py` - should be `__init__.py`
+- **Backend Dependencies:** Flask 2.3.3, SQLAlchemy 3.0.5, JWT-Extended 4.5.3, CORS 4.0.0
+- **Frontend Dependencies:** React 19, Material-UI v6, Tailwind v4, react-toastify v11
+- **Development Status:** All major patterns consistently implemented across codebase
+- **Fixed Issues:** API service auth corruption, React object rendering in ManageSacco regions
+
+## Quick Debugging Checklist
+1. **AuthContext errors:** Verify `agriConnectAPI.auth.getProfile()` method exists
+2. **Object rendering errors:** Check if data arrays contain objects vs primitives
+3. **Duplicate React keys:** Ensure unique keys using `item.id` or `item.name`
+4. **API service corruption:** Look for embedded `\n` characters in method definitions
+5. **Missing auth token:** Check localStorage for `agriConnectToken` and related data
 
 ## Development Workflow
 
@@ -159,6 +204,12 @@ pip install -r requirements.txt && python app.py
 # Frontend (Terminal 2) - requires Node.js
 cd frontend && npm install && npm run dev
 ```
+
+### Common Startup Issues
+- **Auth initialization errors:** Check `agriConnectAPI.auth.getProfile` method exists and is properly formatted
+- **API service corruption:** Look for embedded `\n` characters in method definitions
+- **React rendering errors:** Ensure region/object data is properly extracted before rendering
+- **Missing dependencies:** Frontend requires React 19, Material-UI v6, Tailwind v4
 
 ### Testing Patterns
 - **Manual Integration:** Use scripts like `test_sacco_creation.py` in backend root
