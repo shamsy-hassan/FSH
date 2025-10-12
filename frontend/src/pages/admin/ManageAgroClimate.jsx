@@ -194,26 +194,7 @@ function ManageAgroClimate() {
       setError(null);
     } catch (err) {
       console.error('Weather API failed:', err);
-      // graceful fallback
-      const fallbackWeather = {
-        temperature: 25 + Math.floor(Math.random() * 10),
-        feels_like: 24 + Math.floor(Math.random() * 8),
-        humidity: 50 + Math.floor(Math.random() * 40),
-        rainfall: Math.random() * 5,
-        wind_speed: 10 + Math.floor(Math.random() * 15),
-        wind_direction: Math.floor(Math.random() * 360),
-        weather_condition: ['Sunny', 'Partly Cloudy', 'Cloudy'][Math.floor(Math.random() * 3)],
-        description: 'Estimated weather conditions based on historical data',
-        pressure: 1013 + Math.floor(Math.random() * 20),
-        visibility: 8 + Math.floor(Math.random() * 4),
-        sunrise: '06:15',
-        sunset: '18:30',
-        last_updated: new Date().toLocaleString(),
-        source: 'Fallback Data'
-      };
-      
-      setWeatherData(prev => ({ ...prev, [regionId]: fallbackWeather }));
-      // do not set global error - use fallback
+      setError('Failed to load weather data. Please check your connection and try again.');
     } finally {
       setWeatherLoading(prev => ({ ...prev, [regionId]: false }));
     }

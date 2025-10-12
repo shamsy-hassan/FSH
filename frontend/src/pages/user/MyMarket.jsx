@@ -5,6 +5,8 @@ import { toast } from 'react-toastify';
 const MyMarket = () => {
   const [products, setProducts] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [regions, setRegions] = useState([]);
+  const [productInterests, setProductInterests] = useState(new Map()); // Track interests for each product
   const [loading, setLoading] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showPickupForm, setShowPickupForm] = useState(false);
@@ -40,8 +42,10 @@ const MyMarket = () => {
     contactPhone: ''
   });
 
-  const regions = ['North Region', 'South Region', 'East Region', 'West Region', 'Central Region'];
   const categories = ['Vegetables', 'Fruits', 'Dairy', 'Grains', 'Meat', 'Other'];
+
+  // Get current user ID for conditional logic
+  const userId = JSON.parse(localStorage.getItem('agriConnectUser') || '{}').id;
 
   useEffect(() => {
     loadInitialData();
@@ -55,11 +59,18 @@ const MyMarket = () => {
     try {
       setLoading(true);
       
-      // Load user's own market posts
-      const productsResponse = await agriConnectAPI.market.getUserPosts();
+      // Load user's own market posts and regions in parallel
+      const [productsResponse, regionsResponse] = await Promise.all([
+        agriConnectAPI.farmer.getProducts(),
+        agriConnectAPI.agroclimate.getRegions()
+      ]);
+      
+      let transformedProducts = [];
+      
       if (productsResponse.success) {
         // Transform API data to match component expectations
-        const transformedProducts = productsResponse.posts.map(post => ({
+        const products = productsResponse.products || []; // farmer API returns 'products' not 'posts'
+        transformedProducts = products.map(post => ({
           id: post.id,
           name: post.title || post.name, // API uses 'title', fallback to 'name'
           description: post.description,
@@ -83,11 +94,19 @@ const MyMarket = () => {
         setProducts(transformedProducts);
       }
 
+      // Set regions from API
+      if (regionsResponse.success) {
+        setRegions(regionsResponse.regions.map(region => region.name));
+      }
+
       // Load market notifications (market gaps, buyer requests, etc.)
       const notificationsResponse = await agriConnectAPI.market.getMarketNotifications();
       if (notificationsResponse.success) {
         setNotifications(notificationsResponse.notifications || []);
       }
+
+      // Load product interests to track request status
+      await loadProductInterests(transformedProducts);
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -97,6 +116,37 @@ const MyMarket = () => {
       setNotifications([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load interests for user's products to show request status
+  const loadProductInterests = async (userProducts) => {
+    try {
+      const interestsMap = new Map();
+      
+      // For each user's product, check if there are any admin interests
+      for (const product of userProducts) {
+        if (product.user_id === userId) {
+          const response = await agriConnectAPI.market.getPostInterests(product.id);
+          if (response.success && response.interests) {
+            // Check if there are any admin requests (admin_requested = true)
+            const adminInterests = response.interests.filter(interest => 
+              interest.admin_requested === true
+            );
+            if (adminInterests.length > 0) {
+              interestsMap.set(product.id, {
+                hasAdminRequest: true,
+                adminInterests: adminInterests,
+                latestStatus: adminInterests[0].status // pending, accepted, declined
+              });
+            }
+          }
+        }
+      }
+      
+      setProductInterests(interestsMap);
+    } catch (error) {
+      console.error('Error loading product interests:', error);
     }
   };
 
@@ -132,7 +182,7 @@ const MyMarket = () => {
         quantity: parseFloat(productForm.quantity),
         category: productForm.category,
         region: productForm.region,
-        type: 'offer', // This is a product offer
+        type: 'product', // This is a product
         status: 'pending'
       };
 
@@ -214,6 +264,47 @@ const MyMarket = () => {
     }
   };
 
+  const handleRequestProduct = async (productId) => {
+    try {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      // Check if this is the user's own product
+      const currentUser = JSON.parse(localStorage.getItem('agriConnectUser') || '{}');
+      if (product.user_id === currentUser.id) {
+        toast.error('Cannot send request for your own product');
+        return;
+      }
+
+      const requestData = {
+        message: `I am interested in this product: ${product.title}`,
+        offer_quantity: product.quantity
+      };
+      
+      console.log('Sending interest request for product:', product);
+      console.log('Request data:', requestData);
+      
+      const response = await agriConnectAPI.market.expressInterest(productId, requestData);
+
+      if (response.success) {
+        setProducts(products.map(p => 
+          p.id === productId ? { ...p, status: 'requested', adminRequested: true } : p
+        ));
+        
+        toast.success(`Request sent for ${product.title}. User has been notified.`);
+      } else {
+        toast.error('Failed to send request');
+      }
+    } catch (error) {
+      console.error('Error requesting product:', error);
+      if (error.message === 'Interest already expressed') {
+        toast.info('You have already expressed interest in this product');
+      } else {
+        toast.error('Failed to send request');
+      }
+    }
+  };
+
   const handleSubmitPickupForm = () => {
     if (!pickupForm.pickupDate || !pickupForm.pickupLocation || !pickupForm.deliveryAddress) {
       alert('Please fill in required fields');
@@ -259,6 +350,72 @@ const MyMarket = () => {
       image: null
     });
     setShowProductForm(true);
+  };
+
+  // Handle accepting admin request
+  const handleAcceptRequest = async (productId, interestId) => {
+    try {
+      const response = await agriConnectAPI.market.acceptInterest(interestId);
+      if (response.success) {
+        toast.success('Request accepted successfully!');
+        // Reload interests to update UI
+        const userProducts = products.filter(p => p.user_id === userId);
+        await loadProductInterests(userProducts);
+      } else {
+        toast.error('Failed to accept request');
+      }
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      toast.error('Failed to accept request');
+    }
+  };
+
+  // Handle declining admin request
+  const handleDeclineRequest = async (productId, interestId) => {
+    try {
+      const response = await agriConnectAPI.market.declineInterest(interestId);
+      if (response.success) {
+        toast.success('Request declined');
+        // Reload interests to update UI
+        const userProducts = products.filter(p => p.user_id === userId);
+        await loadProductInterests(userProducts);
+      } else {
+        toast.error('Failed to decline request');
+      }
+    } catch (error) {
+      console.error('Error declining request:', error);
+      toast.error('Failed to decline request');
+    }
+  };
+
+  // Handle scheduling pickup
+  const handleSchedulePickup = (product) => {
+    setSelectedProduct(product);
+    setPickupForm({
+      ...pickupForm,
+      pickupDate: '',
+      pickupTime: '',
+      pickupLocation: '',
+      contactPerson: '',
+      contactPhone: '',
+      specialInstructions: ''
+    });
+    setShowPickupForm(true);
+  };
+
+  // Handle scheduling delivery
+  const handleScheduleDelivery = (product) => {
+    setSelectedProduct(product);
+    setPickupForm({
+      ...pickupForm,
+      deliveryDate: '',
+      deliveryTime: '',
+      deliveryAddress: '',
+      contactPerson: '',
+      contactPhone: '',
+      specialInstructions: ''
+    });
+    setShowPickupForm(true);
   };
 
   const markNotificationAsRead = (notificationId) => {
@@ -330,7 +487,7 @@ const MyMarket = () => {
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
-  const activeNotifications = notifications.filter(n => !n.read || n.type === 'admin_request');
+  const activeNotifications = notifications; // Show all notifications, regardless of read status
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -502,14 +659,61 @@ const MyMarket = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {products.map((product) => (
-                      <div key={product.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-white">
+                    {products.map((product) => {
+                      const productInterest = productInterests.get(product.id);
+                      const hasAdminRequest = productInterest && productInterest.hasAdminRequest;
+                      const isRequestedStatus = hasAdminRequest && productInterest.latestStatus === 'pending';
+                      
+                      return (
+                        <div 
+                          key={product.id} 
+                          className={`border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow bg-white ${
+                            isRequestedStatus ? 'cursor-pointer hover:bg-blue-50 ring-2 ring-blue-200' : ''
+                          }`}
+                          onClick={() => {
+                            if (isRequestedStatus) {
+                              handleSchedulePickup(product);
+                            }
+                          }}
+                        >
                         <div className="flex justify-between items-start mb-4">
                           <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-                          {getStatusBadge(product.status)}
+                          {(() => {
+                            const productInterest = productInterests.get(product.id);
+                            
+                            // Show "Requested" status if there's an admin request
+                            if (productInterest && productInterest.hasAdminRequest) {
+                              const status = productInterest.latestStatus;
+                              if (status === 'pending') {
+                                return getStatusBadge('requested');
+                              } else if (status === 'accepted') {
+                                return getStatusBadge('approved');
+                              } else if (status === 'declined') {
+                                return getStatusBadge('rejected');
+                              }
+                            }
+                            
+                            // Default product status
+                            return getStatusBadge(product.status);
+                          })()}
                         </div>
                         
                         <p className="text-gray-600 text-sm mb-4 line-clamp-2">{product.description}</p>
+                        
+                        {/* Show clickable message for requested products */}
+                        {isRequestedStatus && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div className="flex items-center space-x-2">
+                              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div>
+                                <p className="text-blue-800 text-sm font-medium">Admin has requested this product</p>
+                                <p className="text-blue-600 text-xs">Click anywhere on this card to schedule pickup</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         
                         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                           <div>
@@ -565,32 +769,130 @@ const MyMarket = () => {
                         )}
                         
                         <div className="flex space-x-2">
-                          {product.adminRequested && product.status === 'pending' ? (
-                            <button
-                              onClick={() => handleApproveRequest(product.id)}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                            >
-                              Approve Request
-                            </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProduct(product);
+                            }}
+                            className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                          >
+                            View Details
+                          </button>
+                          
+                          {/* Show different buttons based on product ownership and request status */}
+                          {product.user_id === userId ? (
+                            (() => {
+                              const productInterest = productInterests.get(product.id);
+                              
+                              // If there's an admin request for this product
+                              if (productInterest && productInterest.hasAdminRequest) {
+                                const status = productInterest.latestStatus;
+                                
+                                if (status === 'pending') {
+                                  return (
+                                    <>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleAcceptRequest(product.id, productInterest.adminInterests[0].id);
+                                        }}
+                                        className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        ✅ Accept Request
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeclineRequest(product.id, productInterest.adminInterests[0].id);
+                                        }}
+                                        className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        ❌ Decline
+                                      </button>
+                                    </>
+                                  );
+                                } else if (status === 'accepted') {
+                                  return (
+                                    <>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSchedulePickup(product);
+                                        }}
+                                        className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        📅 Schedule Pickup
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleScheduleDelivery(product);
+                                        }}
+                                        className="flex-1 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        🚚 Schedule Delivery
+                                      </button>
+                                    </>
+                                  );
+                                } else if (status === 'declined') {
+                                  return (
+                                    <>
+                                      <button
+                                        onClick={() => startEditProduct(product)}
+                                        className="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteProduct(product.id)}
+                                        className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
+                                  );
+                                }
+                              }
+                              
+                              // Default: no admin request - show Edit/Delete
+                              return (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditProduct(product);
+                                    }}
+                                    className="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteProduct(product.id);
+                                    }}
+                                    className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              );
+                            })()
                           ) : (
-                            <>
-                              <button
-                                onClick={() => startEditProduct(product)}
-                                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProduct(product.id)}
-                                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                              >
-                                Delete
-                              </button>
-                            </>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRequestProduct(product.id);
+                              }}
+                              className="flex-1 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+                            >
+                              Send Request
+                            </button>
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -279,14 +279,9 @@ def create_market_post():
             harvest_date=harvest_date,
             expiry_date=expiry_date,
             min_order_quantity=float(data.get('min_order_quantity', 1)),
-            max_order_quantity=float(data.get('max_order_quantity')) if data.get('max_order_quantity') else None,
             delivery_available=data.get('delivery_available', 'false').lower() == 'true',
-            pickup_available=data.get('pickup_available', 'true').lower() == 'true',
-            delivery_radius=float(data.get('delivery_radius')) if data.get('delivery_radius') else None,
-            delivery_cost=float(data.get('delivery_cost', 0)),
             tags=tags,
-            organic_certified=data.get('organic_certified', 'false').lower() == 'true',
-            freshness_guarantee=data.get('freshness_guarantee', 'false').lower() == 'true'
+            organic_certified=data.get('organic_certified', 'false').lower() == 'true'
         )
 
         db.session.add(market_post)
@@ -310,6 +305,10 @@ def create_market_post():
         }), 201
         
     except Exception as e:
+        print(f"ERROR creating market post: {str(e)}")
+        print(f"ERROR type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -448,10 +447,11 @@ def approve_market_post(post_id):
 def express_interest(post_id):
     try:
         identity = json.loads(get_jwt_identity())
+        user_id = identity['id']
+        
         if identity.get('type') not in ['user', 'admin', 'farmer', 'agent']:
             return jsonify({'success': False, 'message': 'Access denied'}), 403
 
-        user_id = identity['id']
         data = request.get_json() if request.is_json else request.form.to_dict()
         
         # Get the post to validate
@@ -462,7 +462,7 @@ def express_interest(post_id):
             return jsonify({'success': False, 'message': 'Cannot express interest in your own post'}), 400
         
         # Check if post is available for interest
-        if post.status != 'active' or not post.is_available:
+        if post.status not in ['active', 'approved'] or not post.is_available:
             return jsonify({'success': False, 'message': 'Post is not available for interest'}), 400
         
         # Check if user already expressed interest
@@ -473,23 +473,28 @@ def express_interest(post_id):
         if existing_interest:
             return jsonify({'success': False, 'message': 'Interest already expressed'}), 400
 
-        # Parse delivery date if provided
-        preferred_delivery_date = None
-        if data.get('preferred_delivery_date'):
+        # Parse offer data safely
+        offer_price = None
+        if data.get('offer_price'):
             try:
-                preferred_delivery_date = datetime.datetime.strptime(data['preferred_delivery_date'], '%Y-%m-%d').date()
-            except ValueError:
+                offer_price = float(data.get('offer_price'))
+            except (ValueError, TypeError):
+                pass
+        
+        offer_quantity = None
+        if data.get('offer_quantity'):
+            try:
+                offer_quantity = float(data.get('offer_quantity'))
+            except (ValueError, TypeError):
                 pass
 
         interest = MarketInterest(
             market_post_id=post_id,
             user_id=user_id,
             message=data.get('message', ''),
-            offer_price=float(data.get('offer_price')) if data.get('offer_price') else None,
-            offer_quantity=float(data.get('offer_quantity')) if data.get('offer_quantity') else None,
-            delivery_preference=data.get('delivery_preference'),
-            preferred_delivery_date=preferred_delivery_date,
-            contact_method=data.get('contact_method', 'in_app')
+            offer_price=offer_price,
+            offer_quantity=offer_quantity,
+            admin_requested=identity.get('type') == 'admin'  # Set admin flag if admin is requesting
         )
         
         db.session.add(interest)
@@ -507,6 +512,10 @@ def express_interest(post_id):
         }), 201
         
     except Exception as e:
+        print(f"ERROR in express_interest: {str(e)}")
+        print(f"ERROR type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -755,10 +764,10 @@ def get_user_products():
         if identity.get('type') != 'user':
             return jsonify({'error': 'User access required'}), 403
         
-        # Get user's products
-        products = MarketPost.query.filter_by(
-            user_id=user_id,
-            type='product'
+        # Get user's products (including both 'product' and 'offer' types for backward compatibility)
+        products = MarketPost.query.filter(
+            MarketPost.user_id == user_id,
+            MarketPost.type.in_(['product', 'offer'])  # Include both types
         ).order_by(MarketPost.created_at.desc()).all()
         
         return jsonify({

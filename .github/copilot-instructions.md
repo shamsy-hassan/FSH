@@ -9,6 +9,7 @@ FSH is a full-stack agricultural platform connecting farmers, suppliers, and adm
 **API Pattern:** RESTful with consistent `/api/{module}` prefixes
 **UI Framework:** Material-UI v7.3.2, Tailwind CSS v4.1.13, Framer Motion v12.23.15 for animations
 **Python Version:** 3.12+ required for backend development
+**Key Ports:** Backend Flask on :5000, Frontend Vite on :5173
 
 ## Quick Start
 
@@ -33,6 +34,8 @@ npm run dev
 - Test scripts available: `direct_sacco_test.py` (manual SACCO testing)
 - Manual testing credentials: `admin@agriconnect.com/admin123` (auto-created on first run)
 - Database locations: `backend/app.db` and `backend/instance/app.db` (development SQLite setup)
+- **Model Pattern:** All models must include `to_dict()` method for JSON serialization
+- **Admin Panel:** Access at `/admin` route with admin credentials for management interface
 
 ## Critical Architecture Patterns
 
@@ -49,6 +52,8 @@ is_admin = identity['type'] == 'admin'
 ```
 
 **CONSISTENT:** All routes consistently use `json.loads(get_jwt_identity())` pattern with conditional parsing for string/dict. Backward compatibility pattern: `identity_raw = get_jwt_identity(); identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)` (used in routes like ecommerce.py, message.py, sacco.py for robust handling)
+
+**Critical Note:** Regular users have JWT identity `type: 'user'`, not `type: 'farmer'` - this distinction is crucial for route authorization.
 
 ### Frontend Component Patterns
 - **Page Structure:** Consistent page layout with header, stats cards, tabs, and content sections
@@ -253,6 +258,16 @@ pip install -r requirements.txt && python app.py
 
 # Frontend (Terminal 2) - requires Node.js
 cd frontend && npm install && npm run dev
+```
+
+### Database Initialization
+```bash
+# First run - database is auto-created with admin user
+cd backend && python app.py  # Creates SQLite DB and admin@agriconnect.com/admin123
+
+# Manual data population (optional)
+python populate_all_data.py  # Adds sample regions/warehouses/products
+python direct_sacco_test.py  # Test SACCO functionality
 ```
 
 ### Common Startup Issues

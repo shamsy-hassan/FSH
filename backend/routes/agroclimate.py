@@ -96,21 +96,10 @@ def get_weather(region_id):
             not API_KEY or 
             API_KEY == "your-weather-api-key-if-available"):
             
-            # For development: return sample data when API key not configured
-            # In production, you should get a real API key from https://www.tomorrow.io/
-            sample_weather = WeatherData(
-                region_id=region_id,
-                date=date.today(),
-                temperature=25.0 + (region_id % 5),  # Vary by region
-                humidity=60 + (region_id % 30),
-                rainfall=0.5 * (region_id % 3),
-                wind_speed=3.0 + (region_id % 10),
-                wind_direction=180 + (region_id % 180),
-                weather_condition="Partly Cloudy"
-            )
-            
-            # Don't save to database - just return the data
-            return jsonify(sample_weather.to_dict())
+            return jsonify({
+                'message': 'Weather API key not configured. Please set WEATHER_API_KEY environment variable.',
+                'error': 'API key required for weather data'
+            }), 503
         
         # Tomorrow.io realtime weather endpoint
         base_url = f"https://api.tomorrow.io/v4/weather/realtime"

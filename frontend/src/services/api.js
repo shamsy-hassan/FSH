@@ -694,6 +694,16 @@ async handleResponse(response) {
             return await this.handleResponse(response);
         },
 
+        // Get current user's interests
+        getMyInterests: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/my/interests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
         // Get interests for a post
         getPostInterests: async (postId) => {
             const response = await fetch(`${API_BASE_URL}/market/posts/${postId}/interests`, {
@@ -704,11 +714,33 @@ async handleResponse(response) {
             return await this.handleResponse(response);
         },
 
+        // Get current user's interests
+        getMyInterests: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/my/interests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
         // Accept an interest
         acceptInterest: async (interestId) => {
-            const response = await fetch(`${API_BASE_URL}/market/interests/${interestId}/accept`, {
+            const response = await fetch(`${API_BASE_URL}/market/interests/${interestId}/respond`, {
                 method: 'POST',
                 headers: this.getHeaders(),
+                body: JSON.stringify({ action: 'accept' }),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        // Decline an interest
+        declineInterest: async (interestId) => {
+            const response = await fetch(`${API_BASE_URL}/market/interests/${interestId}/respond`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ action: 'decline' }),
             });
 
             return await this.handleResponse(response);

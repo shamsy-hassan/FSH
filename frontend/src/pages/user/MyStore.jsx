@@ -53,96 +53,7 @@ export default function MyStore({ farmerId }) {
     maximum: { color: 'red', icon: '🚨' }
   };
 
-  // Fixed fallback sample data with proper JSON strings
-  const fallbackWarehouses = [
-    {
-      id: 1,
-      name: "Central Grain Storage",
-      location: "Nairobi, Kenya",
-      region: "Central",
-      capacity: "5000",
-      available_capacity: "3200",
-      security_level: "enhanced",
-      temperature_control: true,
-      humidity_control: true,
-      description: "Modern climate-controlled facility with 24/7 security and advanced monitoring systems.",
-      rates: '{"grains": 12, "fruits": 18, "vegetables": 15}',
-      is_active: true
-    },
-    {
-      id: 2,
-      name: "Eastern Fruit Warehouse",
-      location: "Meru, Kenya",
-      region: "East",
-      capacity: "3000",
-      available_capacity: "1500",
-      security_level: "standard",
-      temperature_control: true,
-      humidity_control: false,
-      description: "Specialized fruit storage with temperature regulation and pest control measures.",
-      rates: '{"grains": 10, "fruits": 16, "vegetables": 13}',
-      is_active: true
-    },
-    {
-      id: 3,
-      name: "Southern Silo Complex",
-      location: "Kisii, Kenya",
-      region: "South",
-      capacity: "8000",
-      available_capacity: "4500",
-      security_level: "maximum",
-      temperature_control: false,
-      humidity_control: false,
-      description: "Large-scale grain silo with maximum security and bulk handling capabilities.",
-      rates: '{"grains": 8, "fruits": 20, "vegetables": 12}',
-      is_active: true
-    },
-    {
-      id: 4,
-      name: "Western Vegetable Depot",
-      location: "Kakamega, Kenya",
-      region: "West",
-      capacity: "2000",
-      available_capacity: "800",
-      security_level: "enhanced",
-      temperature_control: true,
-      humidity_control: true,
-      description: "Fresh produce storage with humidity control and rapid loading facilities.",
-      rates: '{"grains": 11, "fruits": 17, "vegetables": 14}',
-      is_active: true
-    }
-  ];
 
-  const fallbackRequests = [
-    {
-      id: 1,
-      farmerId: farmerId,
-      warehouse_id: 1,
-      product_type: "grains",
-      quantity: "25",
-      duration: "30",
-      start_date: "2025-10-01",
-      end_date: "2025-10-31",
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      total_cost: 9000,
-      special_requirements: "Temperature below 20°C"
-    },
-    {
-      id: 2,
-      farmerId: farmerId,
-      warehouse_id: 2,
-      product_type: "fruits",
-      quantity: "15",
-      duration: "14",
-      start_date: "2025-09-25",
-      end_date: "2025-10-09",
-      status: "approved",
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      total_cost: 3360,
-      special_requirements: ""
-    }
-  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -157,10 +68,7 @@ export default function MyStore({ farmerId }) {
         setError(null);
       } catch (err) {
         console.error("Failed to fetch data:", err);
-        // Set fallback data instead of showing error
-        setWarehouses(fallbackWarehouses);
-        setMyRequests(fallbackRequests);
-        setError("Using demo data - connection temporarily unavailable");
+        setError("Failed to load data. Please check your connection and try again.");
       } finally {
         setLoading(false);
       }

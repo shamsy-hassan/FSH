@@ -144,26 +144,7 @@ function AgroClimate() {
       }
     } catch (err) {
       console.error('Weather API failed:', err);
-      // Set fallback mock data (graceful fallback)
-      const fallbackWeather = {
-        temperature: 25 + Math.floor(Math.random() * 10),
-        feels_like: 24 + Math.floor(Math.random() * 8),
-        humidity: 50 + Math.floor(Math.random() * 40),
-        rainfall: Math.round(Math.random() * 50) / 10,
-        wind_speed: 10 + Math.floor(Math.random() * 15),
-        wind_direction: Math.floor(Math.random() * 360),
-        weather_condition: 'Clouds',
-        description: 'Mostly cloudy with scattered showers - estimated conditions',
-        pressure: 1013,
-        visibility: 10,
-        sunrise: '06:15',
-        sunset: '18:30',
-        last_updated: new Date().toLocaleString(),
-        source: 'Fallback Data'
-      };
-
-      setWeatherData(fallbackWeather);
-      // don't mark global error so the app continues working with fallback
+      setError('Failed to load weather data. Please check your connection and try again.');
     } finally {
       setWeatherLoading(false);
     }
