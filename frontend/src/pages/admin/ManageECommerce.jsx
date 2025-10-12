@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiPlus, FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiCheckCircle, FiXCircle, FiPackage, FiSearch, FiFilter, FiStar } from "react-icons/fi";
+import { FiPlus, FiEdit, FiTrash2, FiX, FiCheckCircle, FiXCircle, FiPackage, FiSearch, FiFilter, FiStar } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import agriConnectAPI from "../../services/api";
 
@@ -30,13 +30,11 @@ const ManageECommerce = () => {
     description: '',
     price: '',
     category_id: '',
-    stock_quantity: '',
     image: null,
     imagePreview: '',
     brand: '',
     weight: '',
     dimensions: '',
-    is_active: true,
     discount: 0,
     is_featured: false
   });
@@ -251,13 +249,11 @@ const ManageECommerce = () => {
         description: '',
         price: '',
         category_id: activeCategory !== 'all' ? activeCategory : '',
-        stock_quantity: '',
         image: null,
         imagePreview: '',
         brand: '',
         weight: '',
         dimensions: '',
-        is_active: true,
         discount: 0,
         is_featured: false
       });
@@ -349,29 +345,22 @@ const ManageECommerce = () => {
       setLoading(true);
       await agriConnectAPI.ecommerce.deleteProduct(productId);
       setSuccess('Product deleted successfully!');
-      fetchProducts(); // Refresh the products list
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       const errorMessage = err.message || 'Failed to delete product';
-      if (errorMessage.includes('existing orders')) {
-        // Ask if user wants to deactivate instead
-        if (window.confirm('This product has existing orders and cannot be deleted. Would you like to deactivate it instead?')) {
-          try {
-            await agriConnectAPI.ecommerce.updateProductStatus(productId, false);
-            setSuccess('Product deactivated successfully!');
-            fetchProducts();
-            setTimeout(() => setSuccess(null), 3000);
-          } catch (deactivateErr) {
-            setError('Failed to deactivate product');
-            setTimeout(() => setError(null), 5000);
-          }
-        }
+      
+      // Handle 404 case (product already deleted)
+      if (err.response && err.response.status === 404) {
+        setSuccess('Product was already deleted');
+        setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(errorMessage);
         setTimeout(() => setError(null), 5000);
       }
     } finally {
       setLoading(false);
+      // Always refresh the product list regardless of success or failure
+      fetchProducts();
     }
   };
 
@@ -699,11 +688,6 @@ const ManageECommerce = () => {
                         Featured
                       </span>
                     )}
-                    {product.stock_quantity < 10 && product.stock_quantity > 0 && (
-                      <span className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        Low Stock
-                      </span>
-                    )}
                   </div>
                   
                   {/* Rating Badge */}
@@ -738,21 +722,6 @@ const ManageECommerce = () => {
 
                 <p className="text-gray-600 text-sm mb-4 line-clamp-2 flex-1">{product.description}</p>
                 
-                {/* Stock and Status */}
-                <div className="flex items-center justify-between mb-4">
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    product.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {product.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                  <span className={`text-sm ${
-                    product.stock_quantity > 10 ? 'text-green-600' : 
-                    product.stock_quantity > 0 ? 'text-orange-600' : 'text-red-600'
-                  }`}>
-                    Stock: {product.stock_quantity}
-                  </span>
-                </div>
-
                 {/* Action Buttons */}
                 <div className="flex justify-between gap-2 pt-4 border-t">
                   <button 
@@ -760,15 +729,6 @@ const ManageECommerce = () => {
                     className="flex-1 flex items-center justify-center text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
                     <FiEdit className="mr-1" /> Edit
-                  </button>
-                  <button 
-                    onClick={() => handleProductStatusChange(product.id, !product.is_active)}
-                    className={`flex-1 flex items-center justify-center text-sm font-medium ${
-                      product.is_active ? 'text-orange-600 hover:text-orange-800' : 'text-green-600 hover:text-green-800'
-                    }`}
-                  >
-                    {product.is_active ? <FiEyeOff className="mr-1" /> : <FiEye className="mr-1" />}
-                    {product.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button 
                     onClick={() => handleDeleteProduct(product.id)}
@@ -890,34 +850,7 @@ const ManageECommerce = () => {
                     </select>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
-                    <input
-                      type="number"
-                      value={editingProduct ? editingProduct.stock_quantity : newProduct.stock_quantity}
-                      onChange={(e) => editingProduct 
-                        ? setEditingProduct({...editingProduct, stock_quantity: e.target.value})
-                        : setNewProduct({...newProduct, stock_quantity: e.target.value})
-                      }
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  
                   <div className="flex items-center gap-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={editingProduct ? editingProduct.is_active : newProduct.is_active}
-                        onChange={(e) => editingProduct 
-                          ? setEditingProduct({...editingProduct, is_active: e.target.checked})
-                          : setNewProduct({...newProduct, is_active: e.target.checked})
-                        }
-                        className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Active</span>
-                    </label>
-                    
                     <label className="flex items-center">
                       <input
                         type="checkbox"

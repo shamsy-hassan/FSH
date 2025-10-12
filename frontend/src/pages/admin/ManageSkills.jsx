@@ -21,12 +21,6 @@ const categories = [
   { id: 'technical', name: 'Technical Skills', icon: '🛠️' }
 ];
 
-const difficulties = [
-  { value: 'beginner', label: '🌱 Beginner', color: 'green' },
-  { value: 'intermediate', label: '🌿 Intermediate', color: 'blue' },
-  { value: 'advanced', label: '🌳 Advanced', color: 'purple' }
-];
-
 export default function ManageSkills() {
   // State Management
   const [skills, setSkills] = useState([]);
@@ -42,7 +36,6 @@ export default function ManageSkills() {
     title: "",
     description: "",
     content: "",
-    difficulty: "beginner",
     estimated_time: "",
     tools_required: "",
     materials_required: "",
@@ -70,7 +63,6 @@ export default function ManageSkills() {
   // Filter State
   const [filters, setFilters] = useState({
     category: 'all',
-    difficulty: 'all',
     status: 'all',
     search: ''
   });
@@ -83,7 +75,7 @@ export default function ManageSkills() {
     try {
       setLoading(true);
       setError(null);
-      const data = await agriConnectAPI.skill.getSkills(null, null);
+      const data = await agriConnectAPI.skill.getSkills(null);
       setSkills(data.skills || []);
     } catch (err) {
       setError('Failed to fetch skills');
@@ -99,7 +91,6 @@ export default function ManageSkills() {
       title: "",
       description: "",
       content: "",
-      difficulty: "beginner",
       estimated_time: "",
       tools_required: "",
       materials_required: "",
@@ -258,7 +249,6 @@ export default function ManageSkills() {
       title: skill.title,
       description: skill.description,
       content: skill.content || '',
-      difficulty: skill.difficulty,
       estimated_time: skill.estimated_time || '',
       tools_required: skill.tools_required || '',
       materials_required: skill.materials_required || '',
@@ -270,10 +260,6 @@ export default function ManageSkills() {
 
   const getCategoryName = (categoryId) => {
     return categories.find(c => c.id === categoryId)?.name || 'Uncategorized';
-  };
-
-  const getDifficultyConfig = (difficulty) => {
-    return difficulties.find(d => d.value === difficulty) || difficulties[0];
   };
 
   const formatVideoUrl = (url) => {
@@ -363,7 +349,6 @@ export default function ManageSkills() {
   const getFilteredSkills = () => {
     return skills.filter(skill => {
       const matchesCategory = filters.category === 'all' || skill.category_id === filters.category;
-      const matchesDifficulty = filters.difficulty === 'all' || skill.difficulty === filters.difficulty;
       const matchesStatus = filters.status === 'all' || 
         (filters.status === 'active' && skill.is_active) || 
         (filters.status === 'inactive' && !skill.is_active);
@@ -371,7 +356,7 @@ export default function ManageSkills() {
         skill.title.toLowerCase().includes(filters.search.toLowerCase()) ||
         skill.description.toLowerCase().includes(filters.search.toLowerCase());
       
-      return matchesCategory && matchesDifficulty && matchesStatus && matchesSearch;
+      return matchesCategory && matchesStatus && matchesSearch;
     });
   };
 
@@ -481,7 +466,6 @@ export default function ManageSkills() {
               {/* Skills Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {skills.map((skill, index) => {
-                  const difficultyConfig = getDifficultyConfig(skill.difficulty);
                   const categoryIcon = categories.find(c => c.id === skill.category_id)?.icon || '📚';
                   
                   return (
@@ -496,13 +480,6 @@ export default function ManageSkills() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <span className="text-2xl">{categoryIcon}</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              difficultyConfig.color === 'green' ? 'bg-green-100 text-green-800' :
-                              difficultyConfig.color === 'blue' ? 'bg-blue-100 text-blue-800' :
-                              'bg-purple-100 text-purple-800'
-                            }`}>
-                              {difficultyConfig.label}
-                            </span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <span className={`w-2 h-2 rounded-full ${skill.is_active ? 'bg-green-500' : 'bg-red-500'}`} />

@@ -29,7 +29,6 @@ class Skill(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     content = db.Column(db.Text)  # Detailed instructions or article
-    difficulty = db.Column(db.String(20), default='beginner')  # beginner, intermediate, advanced
     estimated_time = db.Column(db.String(50))  # e.g., "2 hours", "1 day"
     tools_required = db.Column(db.Text)
     materials_required = db.Column(db.Text)
@@ -48,7 +47,6 @@ class Skill(db.Model):
             'title': self.title,
             'description': self.description,
             'content': self.content,
-            'difficulty': self.difficulty,
             'estimated_time': self.estimated_time,
             'tools_required': self.tools_required,
             'materials_required': self.materials_required,

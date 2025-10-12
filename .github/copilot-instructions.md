@@ -7,7 +7,7 @@ FSH is a full-stack agricultural platform connecting farmers, suppliers, and adm
 **Authentication:** Dual-role JWT system (user/admin) with role-based routing  
 **Database:** SQLite (dev) with relationship-heavy SQLAlchemy models
 **API Pattern:** RESTful with consistent `/api/{module}` prefixes
-**UI Framework:** Material-UI v6, Tailwind CSS v4, Framer Motion for animations
+**UI Framework:** Material-UI v7.3.2, Tailwind CSS v4.1.13, Framer Motion v12.23.15 for animations
 **Python Version:** 3.12+ required for backend development
 
 ## Quick Start
@@ -30,8 +30,9 @@ npm run dev
 
 ### Database Operations
 - Always wrap direct model operations: `with app.app_context():`
-- Test scripts available: `test_sacco_creation.py`, `direct_sacco_test.py`
+- Test scripts available: `direct_sacco_test.py` (manual SACCO testing)
 - Manual testing credentials: `admin@agriconnect.com/admin123` (auto-created on first run)
+- Database locations: `backend/app.db` and `backend/instance/app.db` (development SQLite setup)
 
 ## Critical Architecture Patterns
 
@@ -47,7 +48,7 @@ user_id = identity['id']
 is_admin = identity['type'] == 'admin'
 ```
 
-**CONSISTENT:** All routes consistently use `json.loads(get_jwt_identity())` pattern with conditional parsing for string/dict.
+**CONSISTENT:** All routes consistently use `json.loads(get_jwt_identity())` pattern with conditional parsing for string/dict. Backward compatibility pattern: `identity_raw = get_jwt_identity(); identity = identity_raw if isinstance(identity_raw, dict) else json.loads(identity_raw)` (used in routes like ecommerce.py, message.py, sacco.py for robust handling)
 
 ### Frontend Component Patterns
 - **Page Structure:** Consistent page layout with header, stats cards, tabs, and content sections
@@ -65,13 +66,15 @@ is_admin = identity['type'] == 'admin'
 - **Centralized Service:** All API calls through `AgriConnectAPI` class in `services/api.js`
 - **Token Management:** Auto-attached from localStorage in `getHeaders()`
 - **Error Handling:** Use `agriConnectAPI.handleResponse()` for consistent parsing
-- **State Persistence:** `agriConnectToken`, `agriConnectUser`, `agriConnectUserType` in localStorage
+- **State Persistence:** `agriConnectToken`, `agriConnectUser`, `agriConnectUserType`, `agriConnectUserId` in localStorage
+- **Token Updates:** Always get current token via `localStorage.getItem('agriConnectToken')` in headers, not cached instance variable
 - **UI Components:** Material-UI components with Tailwind utility classes
 - **Animations:** Framer Motion for page transitions and micro-interactions
 - **Icons:** React Icons (Fi* prefix) preferred - consistent across all components
 
 ### Route Structure
-- **Backend Blueprints:** Each domain has `routes/{module}.py` with `{module}_bp`
+- **Backend Blueprints:** Each domain has `routes/{module}.py` with `{module}_bp` 
+- **All Modules:** auth, user, profile, admin, agroclimate, ecommerce, market, order, sacco, skill, storage, message, dashboard
 - **Frontend Pages:** Role-based structure: `/pages/admin/` vs `/pages/user/`
 - **Protection:** `ProtectedRoute` component with `adminOnly` prop for role gates
 
@@ -100,15 +103,25 @@ is_admin = identity['type'] == 'admin'
 - **Security:** Use `werkzeug.utils.secure_filename()` + `extensions.allowed_file()`
 - **Limits:** 100MB max (`MAX_CONTENT_LENGTH` in config) - designed for video uploads
 - **Frontend:** Form data uploads, not JSON for file endpoints
-- **Extensions:** `.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.mp4`, `.avi`, `.mov` allowed
+- **Extensions:** `.txt`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.mp4`, `.avi`, `.mov`, `.webm`, `.mkv` allowed
+- **Profile Pictures:** Separate endpoint `/api/profile/picture` with specific extensions: `.png`, `.jpg`, `.jpeg`, `.gif`
+- **Static File Serving:** Files accessible via `/static/uploads/<filename>` route (configured in `app.py`)
+
+### ECommerce Cart Pattern ⚠️ UPDATED
+- **Add to Cart:** No stock validation - users can add any quantity regardless of stock availability
+- **Stock Display:** Stock quantities shown for information only, not enforced for cart operations
+- **Cart Updates:** No stock restrictions when updating cart item quantities
+- **Order Processing:** Stock validation occurs at order placement, not cart management
+- **UI Behavior:** All "Add to Cart" and "Buy Now" buttons are always enabled regardless of stock status
 
 ### Development Config
-- **Database:** SQLite at `backend/app.db` (also `instance/app.db`)
+- **Database:** SQLite at `backend/instance/app.db` (primary) and `backend/app.db` (legacy)
 - **CORS:** Enabled via `flask_cors` for localhost:5173 → localhost:5000
 - **Auth:** User verification disabled (`is_verified=True` in dev)
 - **JWT:** 24-hour token expiry, stored in localStorage
 - **Frontend Dev Server:** Vite HMR on port 5173 with React 19 + fast refresh
-- **Static Files:** Uploads stored in `backend/static/uploads/`
+- **Static Files:** Uploads stored in `backend/static/uploads/` with direct route serving
+- **Error Handling:** Global 404/500 handlers in `app.py` with database rollback
 
 ## Common Issues & Solutions
 
@@ -126,8 +139,9 @@ is_admin = identity['type'] == 'admin'
 ### API Service Issues
 ❌ **Wrong:** Corrupted auth methods with embedded `\n` characters
 ✅ **Correct:** Ensure auth object has proper `getProfile()` method for AuthContext initialization
-- **AuthContext expects:** `agriConnectAPI.auth.getProfile()` to exist
+- **AuthContext expects:** `agriConnectAPI.auth.getProfile()` to exist (calls `/api/auth/profile`)
 - **Service pattern:** All auth methods should be properly formatted without string escapes
+- **Profile endpoint:** Use `/api/auth/profile` for getting current user, not `/api/user/me` or `/api/profile`
 
 ### React Component Issues  
 ❌ **Wrong:** Using objects as React children or keys
@@ -157,6 +171,16 @@ if identity['type'] != 'admin':
     return jsonify({'error': 'Admin access required'}), 403
 ```
 
+### Farmer Route Authentication Pattern ⚠️ CRITICAL FIX
+❌ **Wrong:** Checking `user.user_type != 'farmer'` (causes 500 errors)
+✅ **Correct:**
+```python
+# Farmer routes should check JWT identity type, not user.user_type
+if identity.get('type') != 'user':
+    return jsonify({'error': 'User access required'}), 403
+```
+**Note:** Regular users (farmers) have JWT identity `type: 'user'`, not `type: 'farmer'`
+
 ### Frontend Route Mismatches
 - **ProtectedRoute:** Use `adminOnly` prop to gate admin pages
 - **API endpoints:** Match backend blueprint prefixes (`/api/auth/`, not `/api/user/`)
@@ -169,7 +193,7 @@ if identity['type'] != 'admin':
 - Database testing: Use `with app.app_context():` pattern from test scripts
 
 ## Key Files for Understanding System
-- **Backend Entry:** `backend/app.py` - blueprint registration and CORS setup
+- **Backend Entry:** `backend/app.py` - blueprint registration, CORS setup, file serving, and error handling
 - **API Client:** `frontend/src/services/api.js` - all endpoint definitions and token handling  
 - **Auth Flow:** `backend/routes/auth.py` + `frontend/src/contexts/AuthContext.jsx`
 - **Model Relationships:** Start with `backend/models/user.py` to see entity connections
@@ -177,14 +201,40 @@ if identity['type'] != 'admin':
 - **Layout System:** `frontend/src/components/Layout.jsx` - conditional admin/user layouts
 - **Component Examples:** `frontend/src/pages/user/MyMarket.jsx` - comprehensive CRUD patterns
 - **Admin UI:** `frontend/src/pages/admin/` - role-specific interface patterns
-- **Frontend Dependencies:** React 19, Material-UI v6, Tailwind v4, Framer Motion, React Router v7
+- **Configuration:** `backend/config.py` - all environment variables and app settings
+- **Extensions:** `backend/extensions.py` - database, JWT, mail, and file upload setup
+- **Frontend Dependencies:** React 19.1.1, Material-UI v7.3.2, Tailwind v4.1.13, Framer Motion v12.23.15, React Router v7.9.1, React Icons v5.5.0, Axios v1.12.2, Recharts v3.2.1
 
-## Current Issues & Notes
-- **Routes Directory:** Typo in `/backend/routes/__nit__.py` - should be `__init__.py`
-- **Backend Dependencies:** Flask 2.3.3, SQLAlchemy 3.0.5, JWT-Extended 4.5.3, CORS 4.0.0
-- **Frontend Dependencies:** React 19, Material-UI v6, Tailwind v4, react-toastify v11
-- **Development Status:** All major patterns consistently implemented across codebase
-- **Fixed Issues:** API service auth corruption, React object rendering in ManageSacco regions
+## Environment Setup & Configuration
+
+### Required Environment Variables
+Create `backend/.env` file with:
+```properties
+FLASK_APP=app.py
+FLASK_ENV=development
+SECRET_KEY=your-super-secret-key-here
+JWT_SECRET_KEY=your-jwt-secret-key-here
+DATABASE_URL=sqlite:///app.db
+WEATHER_API_KEY=your-weather-api-key-if-available
+```
+
+### Python Virtual Environment
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## Current System State & Notes
+- **Routes Directory:** File `/backend/routes/__init__.py` exists as package initializer (standard Python convention)
+- **Backend Dependencies:** Flask 2.3.3, Flask-SQLAlchemy 3.0.5, JWT-Extended 4.5.3, CORS 4.0.0, Flask-Mail 0.9.1, Flask-Uploads 0.2.1, requests 2.31.0, Pillow 10.0.1, python-dotenv 1.0.0
+- **Frontend Dependencies:** React 19.1.1, Material-UI v7.3.2, Tailwind v4.1.13, react-toastify v11.0.5, react-router-dom v7.9.1, Axios 1.12.2, Framer Motion 12.23.15, Vite 7.1.2
+- **Development Status:** All major patterns consistently implemented across codebase (as of Oct 2025)
+- **JWT Pattern:** ✅ Consistently implemented - `json.loads(get_jwt_identity())` pattern used in 20+ route files with backward compatibility handling
+- **API Patterns:** Consistent use of `handleResponse()` method for all API calls with proper error handling
+- **Database State:** SQLite databases in both `backend/app.db` and `backend/instance/app.db` (development setup)
 
 ## Quick Debugging Checklist
 1. **AuthContext errors:** Verify `agriConnectAPI.auth.getProfile()` method exists
@@ -209,13 +259,14 @@ cd frontend && npm install && npm run dev
 - **Auth initialization errors:** Check `agriConnectAPI.auth.getProfile` method exists and is properly formatted
 - **API service corruption:** Look for embedded `\n` characters in method definitions
 - **React rendering errors:** Ensure region/object data is properly extracted before rendering
-- **Missing dependencies:** Frontend requires React 19, Material-UI v6, Tailwind v4
+- **Missing dependencies:** Frontend requires React 19.1.1, Material-UI v7.3.2, Tailwind v4.1.13
 
 ### Testing Patterns
-- **Manual Integration:** Use scripts like `test_sacco_creation.py` in backend root
+- **Manual Integration:** Use scripts like `direct_sacco_test.py` in backend root for testing specific domains
 - **API Testing:** Direct HTTP calls to `localhost:5000/api/{endpoint}`
 - **Admin Credentials:** `admin@agriconnect.com/admin123` (auto-created on first run)
 - **Database Testing:** Always wrap with `with app.app_context():` for direct model operations
+- **No formal test suite:** Project uses manual testing approach with utility scripts
 
 ---
 *This file should be updated as new patterns emerge. Focus on documenting what makes this codebase unique, not generic Flask/React practices.*

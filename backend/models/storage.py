@@ -19,6 +19,8 @@ class Warehouse(db.Model):
     contact_info = db.Column(db.String(200))
     is_active = db.Column(db.Boolean, default=True)
     rates = db.Column(db.Text)  # JSON string of storage rates
+    image_path = db.Column(db.String(500))  # Path to warehouse image
+    description = db.Column(db.Text)  # Warehouse description
     
     # Relationships
     storage_requests = db.relationship('StorageRequest', backref='warehouse', lazy=True)
@@ -37,7 +39,9 @@ class Warehouse(db.Model):
             'owner': self.owner,
             'contact_info': self.contact_info,
             'is_active': self.is_active,
-            'rates': self.rates
+            'rates': self.rates,
+            'image_path': self.image_path,
+            'description': self.description
         }
 
 class StorageRequest(db.Model):

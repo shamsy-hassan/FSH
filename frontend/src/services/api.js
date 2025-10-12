@@ -15,8 +15,10 @@ class AgriConnectAPI {
             'Content-Type': 'application/json',
         };
 
-        if (this.token) {
-            headers['Authorization'] = `Bearer ${this.token}`;
+        // Always get the current token from localStorage
+        const currentToken = localStorage.getItem('agriConnectToken');
+        if (currentToken) {
+            headers['Authorization'] = `Bearer ${currentToken}`;
         }
 
         return headers;
@@ -706,6 +708,21 @@ async handleResponse(response) {
             return await this.handleResponse(response);
         },
 
+        // Get admin-created market needs (visible to all users)
+        getMarketNeeds: async (category = null, region = null, status = 'active', page = 1, perPage = 20) => {
+            let url = `${API_BASE_URL}/market/needs?page=${page}&per_page=${perPage}`;
+            if (category) url += `&category=${category}`;
+            if (region) url += `&region=${region}`;
+            if (status) url += `&status=${status}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
         // Legacy compatibility methods
         getNeeds: async () => {
             return await agriConnectAPI.market.getPosts(null, null, 'need');
@@ -739,6 +756,45 @@ async handleResponse(response) {
 
         updateDeal: async (dealId, dealData) => {
             return await agriConnectAPI.market.updatePost(dealId, dealData);
+        },
+
+        // Market notifications
+        getMarketNotifications: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/notifications`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        createMarketNotification: async (notificationData) => {
+            const response = await fetch(`${API_BASE_URL}/market/notifications`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(notificationData),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        updateMarketNotification: async (notificationId, notificationData) => {
+            const response = await fetch(`${API_BASE_URL}/market/notifications/${notificationId}`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify(notificationData),
+            });
+
+            return await this.handleResponse(response);
+        },
+
+        deleteMarketNotification: async (notificationId) => {
+            const response = await fetch(`${API_BASE_URL}/market/notifications/${notificationId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
         },
 
         acceptNeed: async (needId, userId) => {
@@ -1124,13 +1180,10 @@ agroclimate = {
         },
 
         // Get skills with optional filtering
-        getSkills: async (categoryId = null, difficulty = null, page = 1, perPage = 20) => {
+        getSkills: async (categoryId = null, page = 1, perPage = 20) => {
             let url = `${API_BASE_URL}/skill/skills?page=${page}&per_page=${perPage}`;
             if (categoryId) {
                 url += `&category_id=${categoryId}`;
-            }
-            if (difficulty) {
-                url += `&difficulty=${difficulty}`;
             }
 
             const response = await fetch(url, {
@@ -1295,10 +1348,19 @@ storage = {
 
     // Create warehouse (admin only) - MISSING METHOD
     createWarehouse: async (warehouseData) => {
+        const headers = {};
+        
+        // Always get the current token from localStorage
+        const currentToken = localStorage.getItem('agriConnectToken');
+        if (currentToken) {
+            headers['Authorization'] = `Bearer ${currentToken}`;
+        }
+
+        // Don't set Content-Type for FormData - let browser set it with boundary
         const response = await fetch(`${API_BASE_URL}/storage/warehouses`, {
             method: 'POST',
-            headers: this.getHeaders(),
-            body: JSON.stringify(warehouseData),
+            headers: headers,
+            body: warehouseData, // FormData or JSON depending on what's passed
         });
 
         return await this.handleResponse(response);
@@ -1519,6 +1581,301 @@ storage = {
             const response = await fetch(`${API_BASE_URL}/dashboard/features`, {
                 method: 'GET',
                 headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        }
+    };
+
+    // Agent API calls (now Admin API calls)
+    agent = {
+        // Get farmer products (now user products)
+        getFarmerProducts: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/user-products`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get buyer requests
+        getBuyerRequests: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/buyer-requests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Request product from farmer (now user)
+        requestProduct: async (productId, quantity, message = '') => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/product-requests`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ productId, quantity, message }),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get transactions
+        getTransactions: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/transactions`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get commissions
+        getCommissions: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/commissions`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get market updates
+        getMarketUpdates: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/market-updates`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get trending products
+        getTrendingProducts: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/trending-products`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get dashboard data
+        getDashboard: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/dashboard`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        }
+    };
+
+    // Farmer API calls
+    farmer = {
+        // Get farmer's products
+        getProducts: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/products`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Create product
+        createProduct: async (formData) => {
+            const currentToken = localStorage.getItem('agriConnectToken');
+            const response = await fetch(`${API_BASE_URL}/market/user/products`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                },
+                body: formData,
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Update product
+        updateProduct: async (productId, productData) => {
+            const currentToken = localStorage.getItem('agriConnectToken');
+            const headers = {};
+            if (currentToken) {
+                headers['Authorization'] = `Bearer ${currentToken}`;
+            }
+            
+            let body;
+            if (productData instanceof FormData) {
+                body = productData;
+            } else {
+                headers['Content-Type'] = 'application/json';
+                body = JSON.stringify(productData);
+            }
+            
+            const response = await fetch(`${API_BASE_URL}/market/user/products/${productId}`, {
+                method: 'PUT',
+                headers: headers,
+                body: body,
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Delete product
+        deleteProduct: async (productId) => {
+            const response = await fetch(`${API_BASE_URL}/market/user/products/${productId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get admin requests (previously agent requests)
+        getAgentRequests: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/admin-requests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Respond to admin request (previously agent request)
+        respondToAgentRequest: async (interestId, response) => {
+            const responseData = await fetch(`${API_BASE_URL}/market/user/admin-requests/${interestId}/respond`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ response }),
+            });
+            return await this.handleResponse(responseData);
+        },
+
+        // Get notifications
+        getNotifications: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/notifications`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get market insights
+        getMarketInsights: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/market-insights`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get sales data
+        getSales: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/sales`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get dashboard data
+        getDashboard: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/dashboard`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Fill form for admin request (keeping for compatibility)
+        fillForm: async (requestId, formData) => {
+            // This endpoint might need to be updated based on new backend structure
+            const response = await fetch(`${API_BASE_URL}/market/user/fill-form/${requestId}`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(formData),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Mark notification as read
+        markNotificationAsRead: async (notificationId) => {
+            const response = await fetch(`${API_BASE_URL}/market/user/notifications/${notificationId}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get market demands for farmers
+        getMarketDemands: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/demands`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get received product requests
+        getProductRequests: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/user/requests`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Approve product request
+        approveProductRequest: async (requestId) => {
+            const response = await fetch(`${API_BASE_URL}/market/requests/${requestId}/approve`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Reject product request
+        rejectProductRequest: async (requestId) => {
+            const response = await fetch(`${API_BASE_URL}/market/requests/${requestId}/reject`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Create delivery details for approved request
+        createDeliveryDetails: async (requestId, deliveryData) => {
+            const response = await fetch(`${API_BASE_URL}/market/requests/${requestId}/delivery`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(deliveryData),
+            });
+            return await this.handleResponse(response);
+        },
+
+        // Get sales history
+        getHistory: async () => {
+            const response = await fetch(`${API_BASE_URL}/market/history`, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+            return await this.handleResponse(response);
+        }
+    };
+
+    // Market requests API
+    marketRequests = {
+        // Create product request
+        createProductRequest: async (productId, quantity, priceOffered, message = '') => {
+            const response = await fetch(`${API_BASE_URL}/market/requests`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    product_id: productId,
+                    quantity_requested: quantity,
+                    price_offered: priceOffered,
+                    message: message
+                }),
+            });
+            return await this.handleResponse(response);
+        }
+    };
+
+    // Admin market demand API
+    adminMarketDemand = {
+        // Create market demand notification
+        createMarketDemand: async (demandData) => {
+            const response = await fetch(`${API_BASE_URL}/market/admin/demands`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(demandData),
             });
             return await this.handleResponse(response);
         }

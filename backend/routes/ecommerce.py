@@ -150,8 +150,7 @@ def add_to_cart():
         if not product or not product.is_active:
             return jsonify({'message': 'Product not found'}), 404
         
-        if product.stock_quantity < data.get('quantity', 1):
-            return jsonify({'message': 'Insufficient stock'}), 400
+        # Removed stock quantity check - allow adding to cart regardless of stock
         
         existing_item = CartItem.query.filter_by(
             cart_id=cart.id, 
@@ -197,8 +196,7 @@ def update_cart_item(item_id):
         if data['quantity'] <= 0:
             db.session.delete(item)
         else:
-            if item.product.stock_quantity < data['quantity']:
-                return jsonify({'message': 'Insufficient stock'}), 400
+            # Removed stock quantity check - allow updating cart regardless of stock
             item.quantity = data['quantity']
         
         db.session.commit()
@@ -441,24 +439,49 @@ def update_product(product_id):
 @jwt_required()
 def delete_product(product_id):
     try:
-        identity = json.loads(get_jwt_identity())
+        print(f"DEBUG: Attempting to delete product {product_id}")
+        
+        identity_raw = get_jwt_identity()
+        print(f"DEBUG: Raw identity: {identity_raw}")
+        
+        # Handle both string and dict formats for backward compatibility
+        if isinstance(identity_raw, dict):
+            identity = identity_raw
+        else:
+            identity = json.loads(identity_raw)
+            
+        print(f"DEBUG: Parsed identity: {identity}")
+        
         user_type = identity.get('type')
+        print(f"DEBUG: User type: {user_type}")
         
         if user_type != 'admin':
+            print(f"DEBUG: Access denied - user type is {user_type}, not admin")
             return jsonify({'message': 'Admin access required'}), 403
         
-        product = Product.query.get_or_404(product_id)
+        product = Product.query.get(product_id)
+        print(f"DEBUG: Product found: {product is not None}")
+        
+        if not product:
+            print(f"DEBUG: Product {product_id} not found, returning 404")
+            return jsonify({
+                'message': 'Product not found or already deleted'
+            }), 404
         
         # Check if product is in any active orders
         from models.order import OrderItem
         order_items = OrderItem.query.filter_by(product_id=product_id).first()
+        print(f"DEBUG: Order items found: {order_items is not None}")
+        
         if order_items:
+            print(f"DEBUG: Cannot delete - product has order items")
             return jsonify({
                 'message': 'Cannot delete product with existing orders. Deactivate instead.'
             }), 400
         
         db.session.delete(product)
         db.session.commit()
+        print(f"DEBUG: Product {product_id} deleted successfully")
         
         return jsonify({
             'message': 'Product deleted successfully'

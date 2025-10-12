@@ -929,7 +929,6 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, viewProduct
               <button
                 onClick={() => setQuantity(quantity + 1)}
                 className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-r-lg transition"
-                disabled={product.stock_quantity > 0 && quantity >= product.stock_quantity}
               >
                 <FiPlus className="h-3 w-3" />
               </button>
@@ -939,23 +938,20 @@ function EnhancedProductCard({ product, addToCart, placeDirectOrder, viewProduct
           <div className="flex gap-2">
             <button
               onClick={handleAddToCart}
-              className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={product.stock_quantity <= 0}
+              className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center justify-center"
             >
               <FiShoppingCart className="mr-1" />
               Add to Cart
             </button>
             
-            {product.stock_quantity > 0 && (
-              <button
-                onClick={handleQuickOrder}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
-                title="Quick Order - Order this product directly"
-              >
-                <FiPackage className="mr-1" />
-                Order Now
-              </button>
-            )}
+            <button
+              onClick={handleQuickOrder}
+              className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+              title="Quick Order - Order this product directly"
+            >
+              <FiPackage className="mr-1" />
+              Order Now
+            </button>
           </div>
         </div>
       </div>
@@ -1587,7 +1583,6 @@ function ProductDetailsModal({ product, onClose, addToCart, placeDirectOrder }) 
                     <button
                       onClick={() => setQuantity(quantity + 1)}
                       className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-r-lg"
-                      disabled={product.stock_quantity > 0 && quantity >= product.stock_quantity}
                     >
                       <FiPlus className="h-4 w-4" />
                     </button>
@@ -1597,22 +1592,19 @@ function ProductDetailsModal({ product, onClose, addToCart, placeDirectOrder }) 
                 <div className="flex gap-3">
                   <button
                     onClick={handleAddToCart}
-                    disabled={product.stock_quantity <= 0}
-                    className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center"
                   >
                     <FiShoppingCart className="mr-2" />
                     Add to Cart
                   </button>
                   
-                  {product.stock_quantity > 0 && (
-                    <button
-                      onClick={handleQuickOrder}
-                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
-                    >
-                      <FiPackage className="mr-2" />
-                      Buy Now
-                    </button>
-                  )}
+                  <button
+                    onClick={handleQuickOrder}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+                  >
+                    <FiPackage className="mr-2" />
+                    Buy Now
+                  </button>
                 </div>
               </div>
             </div>

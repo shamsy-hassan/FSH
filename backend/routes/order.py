@@ -104,12 +104,7 @@ def create_order():
         if not cart or not cart.items:
             return jsonify({'message': 'Cart is empty'}), 400
         
-        # Check stock availability
-        for item in cart.items:
-            if item.product.stock_quantity < item.quantity:
-                return jsonify({
-                    'message': f'Insufficient stock for {item.product.name}'
-                }), 400
+        # Removed stock availability check - allow orders regardless of stock
         
         # Generate order number
         order_number = generate_order_number()
@@ -132,7 +127,7 @@ def create_order():
         db.session.add(order)
         db.session.flush()  # Get order ID without committing
         
-        # Create order items from cart items and update stock
+        # Create order items from cart items (without stock updates)
         for cart_item in cart.items:
             order_item = OrderItem(
                 order_id=order.id,
@@ -143,8 +138,7 @@ def create_order():
             )
             db.session.add(order_item)
             
-            # Update product stock
-            cart_item.product.stock_quantity -= cart_item.quantity
+            # Removed stock quantity update - orders don't affect stock levels
         
         # Clear the cart
         CartItem.query.filter_by(cart_id=cart.id).delete()
@@ -255,9 +249,7 @@ def cancel_order(order_id):
                 'message': 'Only pending orders can be cancelled'
             }), 400
         
-        # Restore product stock
-        for item in order.items:
-            item.product.stock_quantity += item.quantity
+        # Removed stock restoration - orders don't affect stock levels
         
         # Update order status
         order.status = OrderStatus.CANCELLED

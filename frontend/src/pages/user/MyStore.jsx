@@ -35,7 +35,7 @@ export default function MyStore({ farmerId }) {
     special_requirements: ''
   });
 
-  const regions = ['North', 'South', 'East', 'West', 'Central'];
+  const regions = ['North', 'South', 'East', 'West', 'Central', 'Coastal'];
   const productTypes = [
     { value: 'grains', label: '🌾 Grains', icon: '🌾' },
     { value: 'fruits', label: '🍎 Fruits', icon: '🍎' },

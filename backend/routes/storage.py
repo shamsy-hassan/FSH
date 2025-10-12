@@ -2,10 +2,13 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.storage import Warehouse, StorageRequest, StorageTransaction
-from extensions import db
+from extensions import db, allowed_file
 from decimal import Decimal
 import datetime
 import json   # ✅ added
+import os
+import uuid
+from werkzeug.utils import secure_filename
 
 storage_bp = Blueprint('storage', __name__)
 
@@ -46,22 +49,45 @@ def create_warehouse():
     if identity.get('type') != 'admin':
         return jsonify({'message': 'Admin access required'}), 403
     
-    data = request.get_json()
+    # Handle both JSON and FormData
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        # FormData (with file upload)
+        data = request.form.to_dict()
+        image_file = request.files.get('image')
+    else:
+        # JSON data (backward compatibility)
+        data = request.get_json()
+        image_file = None
     
     try:
+        # Handle image upload
+        image_path = None
+        if image_file and image_file.filename and allowed_file(image_file.filename):
+            # Generate unique filename
+            filename = secure_filename(image_file.filename)
+            unique_filename = str(uuid.uuid4())[:8] + '.' + filename.rsplit('.', 1)[1].lower()
+            
+            # Save file
+            upload_path = os.path.join('static', 'uploads', unique_filename)
+            os.makedirs(os.path.dirname(upload_path), exist_ok=True)
+            image_file.save(upload_path)
+            image_path = upload_path
+
         # Create new warehouse
         warehouse = Warehouse(
             name=data['name'],
             location=data['location'],
             region=data['region'],
             capacity=float(data['capacity']),
-            available_capacity=float(data.get('available_capacity', data['capacity'])),
-            temperature_control=bool(data.get('temperature_control', False)),
-            humidity_control=bool(data.get('humidity_control', False)),
+            available_capacity=float(data['capacity']),  # Default to full capacity
+            temperature_control=False,  # Default to False since we removed it
+            humidity_control=False,  # Default to False since we removed it
             security_level=data.get('security_level', 'standard'),
             owner=data.get('owner', ''),
             contact_info=data.get('contact_info', ''),
-            rates=data.get('rates', '{}')
+            description=data.get('description', ''),
+            rates='{}',  # Default empty JSON since we removed it
+            image_path=image_path
         )
         
         db.session.add(warehouse)

@@ -18,25 +18,11 @@ const categories = [
   { id: 'technical', name: 'Technical Skills', icon: '🛠️' }
 ];
 
-const difficulties = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' }
-];
-
-// Difficulty styles
-const difficultyStyles = {
-  beginner: { color: 'green', icon: '🌱' },
-  intermediate: { color: 'blue', icon: '🌿' },
-  advanced: { color: 'purple', icon: '🌳' }
-};
-
 export default function Skills() {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [difficultyFilter, setDifficultyFilter] = useState('all');
   const [expandedSkillIds, setExpandedSkillIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [completedSkills, setCompletedSkills] = useState([]);
@@ -44,15 +30,14 @@ export default function Skills() {
 
   useEffect(() => {
     fetchSkills();
-  }, [categoryFilter, difficultyFilter]);
+  }, [categoryFilter]);
 
   const fetchSkills = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await agriConnectAPI.skill.getSkills(
-        categoryFilter === 'all' ? null : categoryFilter,
-        difficultyFilter === 'all' ? null : difficultyFilter
+        categoryFilter === 'all' ? null : categoryFilter
       );
       setSkills(data.skills || []);
     } catch (err) {
@@ -161,10 +146,9 @@ export default function Skills() {
 
   const filteredSkills = skills.filter(skill => {
     const matchesCategory = categoryFilter === 'all' || skill.category_id === categoryFilter;
-    const matchesDifficulty = difficultyFilter === 'all' || skill.difficulty === difficultyFilter;
     const matchesSearch = skill.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          skill.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesDifficulty && matchesSearch;
+    return matchesCategory && matchesSearch;
   });
 
   const toggleExpand = (id) => {
@@ -283,21 +267,6 @@ export default function Skills() {
               </motion.select>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-              <motion.select
-                value={difficultyFilter}
-                onChange={(e) => setDifficultyFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 transition-all"
-                whileFocus={{ scale: 1.02 }}
-              >
-                <option value="all">All Difficulties</option>
-                {difficulties.map(diff => (
-                  <option key={diff.value} value={diff.value}>{diff.label}</option>
-                ))}
-              </motion.select>
-            </div>
-
             <div className="mt-6">
               <h3 className="font-medium text-gray-700 mb-2">Your Progress</h3>
               <div className="bg-green-50 p-3 rounded-md">
@@ -334,7 +303,6 @@ export default function Skills() {
                   {filteredSkills.map((skill, index) => {
                     const isExpanded = expandedSkillIds.includes(skill.id);
                     const isCompleted = completedSkills.includes(skill.id);
-                    const diffStyle = difficultyStyles[skill.difficulty] || difficultyStyles.beginner;
 
                     return (
                       <motion.div
@@ -350,9 +318,6 @@ export default function Skills() {
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
                                 <h3 className="text-xl font-semibold text-gray-900">{skill.title}</h3>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${diffStyle.color}-100 text-${diffStyle.color}-700`}>
-                                  {diffStyle.icon} {skill.difficulty}
-                                </span>
                                 {isCompleted && (
                                   <motion.div
                                     initial={{ scale: 0 }}

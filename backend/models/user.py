@@ -12,7 +12,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     is_verified = db.Column(db.Boolean, default=False)
-    user_type = db.Column(db.String(20), default='farmer')  # farmer, supplier, etc.
+    user_type = db.Column(db.String(20), default='farmer')  # farmer, supplier, agent, admin
     
     # Relationships
     profile = db.relationship('UserProfile', backref='user', uselist=False, cascade='all, delete-orphan')

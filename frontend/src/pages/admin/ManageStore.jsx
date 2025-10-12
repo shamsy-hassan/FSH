@@ -20,17 +20,16 @@ export default function ManageStore() {
     location: '',
     region: '',
     capacity: '',
-    available_capacity: '',
-    temperature_control: false,
-    humidity_control: false,
     security_level: 'standard',
     owner: '',
     contact_info: '',
-    rates: '{}',
-    description: ''
+    description: '',
+    image: null
   });
 
-  const regions = ['North', 'South', 'East', 'West', 'Central'];
+  const [imagePreview, setImagePreview] = useState(null);
+
+  const regions = ['North', 'South', 'East', 'West', 'Central', 'Coastal'];
   const securityLevels = ['standard', 'enhanced', 'maximum'];
 
   // Security level styles
@@ -101,25 +100,49 @@ export default function ManageStore() {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setNewWarehouse({...newWarehouse, image: file});
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const createWarehouse = async (e) => {
     e.preventDefault();
     try {
-      await agriConnectAPI.storage.createWarehouse(newWarehouse);
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Append all warehouse data
+      Object.keys(newWarehouse).forEach(key => {
+        if (key === 'image' && newWarehouse[key]) {
+          formData.append('image', newWarehouse[key]);
+        } else if (key !== 'image') {
+          formData.append(key, newWarehouse[key]);
+        }
+      });
+
+      await agriConnectAPI.storage.createWarehouse(formData);
       setShowWarehouseForm(false);
       setNewWarehouse({
         name: '',
         location: '',
         region: '',
         capacity: '',
-        available_capacity: '',
-        temperature_control: false,
-        humidity_control: false,
         security_level: 'standard',
         owner: '',
         contact_info: '',
-        rates: '{}',
-        description: ''
+        description: '',
+        image: null
       });
+      setImagePreview(null);
       fetchWarehouses(); // Refresh list
       setError(null);
       alert("Warehouse created successfully!");
@@ -149,7 +172,6 @@ export default function ManageStore() {
     })
     .sort((a, b) => {
       if (sortOption === "capacity") return parseFloat(b.capacity) - parseFloat(a.capacity);
-      if (sortOption === "availability") return parseFloat(b.available_capacity) - parseFloat(a.available_capacity);
       return 0;
     });
 
@@ -371,15 +393,22 @@ export default function ManageStore() {
                         <h3 className="text-xl font-semibold text-green-800">{warehouse.name}</h3>
                         <p className="text-sm text-gray-600">{warehouse.location}, {warehouse.region}</p>
                       </div>
+                      
+                      {warehouse.image_path && (
+                        <div className="h-48 overflow-hidden">
+                          <img
+                            src={`http://localhost:5000/${warehouse.image_path}`}
+                            alt={warehouse.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      
                       <div className="p-4">
                         <div className="grid grid-cols-2 gap-2 mb-3">
                           <div>
                             <p className="text-sm text-gray-500">Total Capacity</p>
                             <p className="font-medium">{warehouse.capacity} tons</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">Available</p>
-                            <p className="font-medium">{warehouse.available_capacity} tons</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Security</p>
@@ -395,19 +424,6 @@ export default function ManageStore() {
                           </div>
                         </div>
                         <p className="text-sm mb-3">{warehouse.description || "Secure warehouse facility with modern storage solutions."}</p>
-                        
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {warehouse.temperature_control && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              🌡️ Temperature Control
-                            </span>
-                          )}
-                          {warehouse.humidity_control && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              💧 Humidity Control
-                            </span>
-                          )}
-                        </div>
                         
                         <div className="flex space-x-2">
                           <button
@@ -509,18 +525,6 @@ export default function ManageStore() {
                       required
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Available Capacity (tons)</label>
-                    <input
-                      type="number"
-                      placeholder="500"
-                      value={newWarehouse.available_capacity}
-                      onChange={(e) => setNewWarehouse({...newWarehouse, available_capacity: e.target.value})}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      required
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -565,27 +569,26 @@ export default function ManageStore() {
                   />
                 </div>
 
-                <div className="flex space-x-4 mb-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newWarehouse.temperature_control}
-                      onChange={(e) => setNewWarehouse({...newWarehouse, temperature_control: e.target.checked})}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Temperature Control</span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newWarehouse.humidity_control}
-                      onChange={(e) => setNewWarehouse({...newWarehouse, humidity_control: e.target.checked})}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Humidity Control</span>
-                  </label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  {imagePreview && (
+                    <div className="mt-2">
+                      <img
+                        src={imagePreview}
+                        alt="Warehouse preview"
+                        className="h-32 w-48 object-cover rounded-lg border border-gray-200"
+                      />
+                    </div>
+                  )}
                 </div>
+
+
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -599,16 +602,7 @@ export default function ManageStore() {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Base Rates (JSON)</label>
-                    <textarea
-                      placeholder='{"grains": 10, "fruits": 15, "vegetables": 12}'
-                      value={newWarehouse.rates}
-                      onChange={(e) => setNewWarehouse({...newWarehouse, rates: e.target.value})}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                  </div>
+
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">

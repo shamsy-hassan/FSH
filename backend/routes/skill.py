@@ -22,7 +22,6 @@ def get_skill_category(category_id):
 @skill_bp.route('/skills', methods=['GET'])
 def get_skills():
     category_id = request.args.get('category_id')
-    difficulty = request.args.get('difficulty')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
@@ -30,8 +29,6 @@ def get_skills():
     
     if category_id:
         query = query.filter_by(category_id=category_id)
-    if difficulty:
-        query = query.filter_by(difficulty=difficulty)
     
     skills = query.paginate(page=page, per_page=per_page, error_out=False)
     

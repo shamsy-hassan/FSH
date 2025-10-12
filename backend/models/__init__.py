@@ -14,7 +14,7 @@ from .order import Order, OrderItem, OrderStatus
 
 # Import other modules
 try:
-    from .market import MarketPost, MarketCategory
+    from .market import MarketPost, MarketInterest, ProductRequest, DeliveryDetails, MarketNotification, MarketDemand
 except ImportError:
     pass
 

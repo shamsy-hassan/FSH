@@ -84,7 +84,38 @@ def login():
         if not username or not password:
             return jsonify({'error': 'Username and password are required'}), 400
         
-        # First try to authenticate as regular user
+        # If admin access is specifically requested, check admin table first
+        if requested_type == 'admin':
+            admin = Admin.query.filter_by(username=username).first()
+            
+            if admin and admin.check_password(password):
+                if not admin.is_active:
+                    return jsonify({'error': 'Admin account is deactivated'}), 401
+                
+                # Create access token for admin
+                import json
+                access_token = create_access_token(
+                    identity=json.dumps({'id': admin.id, 'type': 'admin'}),
+                    additional_claims={
+                        'type': 'admin',
+                        'username': admin.username,
+                        'role': admin.role,
+                        'email': admin.email
+                    }
+                )
+                
+                return jsonify({
+                    'access_token': access_token,
+                    'user_type': 'admin',
+                    'admin': admin.to_dict(),
+                    'type': 'admin',
+                    'success': True
+                }), 200
+            
+            # If admin not found or password incorrect, return error
+            return jsonify({'error': 'Invalid admin credentials'}), 401
+        
+        # For user access or no specific type requested, try user table first
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
@@ -115,36 +146,33 @@ def login():
                 'success': True
             }), 200
         
-        # If not a user, try to authenticate as admin
-        admin = Admin.query.filter_by(username=username).first()
-        
-        if admin and admin.check_password(password):
-            if not admin.is_active:
-                return jsonify({'error': 'Admin account is deactivated'}), 401
+        # If no specific type requested and user not found, try admin table
+        if not requested_type:
+            admin = Admin.query.filter_by(username=username).first()
             
-            # If a specific user type was requested and it doesn't match, deny access
-            if requested_type == 'user':
-                return jsonify({'error': 'Invalid credentials for user access'}), 401
-            
-            # Create access token for admin
-            import json
-            access_token = create_access_token(
-                identity=json.dumps({'id': admin.id, 'type': 'admin'}),
-                additional_claims={
+            if admin and admin.check_password(password):
+                if not admin.is_active:
+                    return jsonify({'error': 'Admin account is deactivated'}), 401
+                
+                # Create access token for admin
+                import json
+                access_token = create_access_token(
+                    identity=json.dumps({'id': admin.id, 'type': 'admin'}),
+                    additional_claims={
+                        'type': 'admin',
+                        'username': admin.username,
+                        'role': admin.role,
+                        'email': admin.email
+                    }
+                )
+                
+                return jsonify({
+                    'access_token': access_token,
+                    'user_type': 'admin',
+                    'admin': admin.to_dict(),
                     'type': 'admin',
-                    'username': admin.username,
-                    'role': admin.role,
-                    'email': admin.email
-                }
-            )
-            
-            return jsonify({
-                'access_token': access_token,
-                'user_type': 'admin',
-                'admin': admin.to_dict(),
-                'type': 'admin',
-                'success': True
-            }), 200
+                    'success': True
+                }), 200
         
         # Neither user nor admin found with valid credentials
         return jsonify({'error': 'Invalid username or password'}), 401
