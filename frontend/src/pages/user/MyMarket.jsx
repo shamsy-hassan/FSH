@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { agriConnectAPI } from '../../services/api';
+import { toast } from 'react-toastify';
 
 const MyMarket = () => {
   const [products, setProducts] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showPickupForm, setShowPickupForm] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -48,104 +51,62 @@ const MyMarket = () => {
     updateStats();
   }, [products, notifications]);
 
-  const loadInitialData = () => {
-    const userProducts = [
-      {
-        id: 1,
-        name: 'Fresh Tomatoes',
-        description: 'Organic tomatoes from local farm, harvested daily',
-        price: 2.5,
-        quantity: 50,
-        category: 'Vegetables',
-        region: 'North Region',
-        status: 'pending',
-        adminRequested: false,
-        dateAdded: '2024-01-15',
-        views: 24,
-        inquiries: 3
-      },
-      {
-        id: 2,
-        name: 'Organic Milk',
-        description: 'Fresh organic milk from grass-fed cows',
-        price: 3.0,
-        quantity: 20,
-        category: 'Dairy',
-        region: 'South Region',
-        status: 'approved',
-        adminRequested: true,
-        dateAdded: '2024-01-14',
-        views: 45,
-        inquiries: 8,
-        pickupDetails: {
-          pickupDate: '2024-01-20',
-          pickupTime: '14:00',
-          status: 'scheduled'
-        }
-      },
-      {
-        id: 3,
-        name: 'Golden Apples',
-        description: 'Sweet and crispy golden delicious apples',
-        price: 1.8,
-        quantity: 100,
-        category: 'Fruits',
-        region: 'East Region',
-        status: 'requested',
-        adminRequested: true,
-        dateAdded: '2024-01-16',
-        views: 31,
-        inquiries: 5
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load user's own market posts
+      const productsResponse = await agriConnectAPI.market.getUserPosts();
+      if (productsResponse.success) {
+        // Transform API data to match component expectations
+        const transformedProducts = productsResponse.posts.map(post => ({
+          id: post.id,
+          name: post.title || post.name, // API uses 'title', fallback to 'name'
+          description: post.description,
+          price: parseFloat(post.price) || 0,
+          quantity: parseFloat(post.quantity) || 0,
+          category: post.category,
+          region: post.region,
+          status: post.status,
+          approved: post.approved,
+          adminRequested: false, // This would need to be tracked separately
+          dateAdded: post.created_at,
+          views: post.view_count || 0,
+          inquiries: post.interest_count || 0,
+          images: post.images || [],
+          type: post.type, // 'product', 'offer', or 'need'
+          // Additional fields from API
+          user_id: post.user_id,
+          organic_certified: post.organic_certified,
+          delivery_available: post.delivery_available
+        }));
+        setProducts(transformedProducts);
       }
-    ];
 
-    const userNotifications = [
-      {
-        id: 1,
-        type: 'market_gap',
-        region: 'East Region',
-        productNeeded: 'Carrots',
-        quantity: '100kg',
-        priceRange: '$1.5-$2.0',
-        exactLocation: 'East Market, Stall 15',
-        timestamp: '2024-01-15T10:30:00',
-        read: false,
-        urgency: 'high',
-        expiryDate: '2024-01-25'
-      },
-      {
-        id: 2,
-        type: 'buyer_request',
-        region: 'Central Region',
-        productNeeded: 'Organic Eggs',
-        quantity: '50 trays',
-        priceRange: '$3.0-$4.0',
-        exactLocation: 'Central Mall Food Court',
-        timestamp: '2024-01-15T14:20:00',
-        read: true,
-        urgency: 'medium',
-        expiryDate: '2024-01-22'
-      },
-      {
-        id: 3,
-        type: 'admin_request',
-        productId: 2,
-        productName: 'Organic Milk',
-        message: 'Admin has requested your product "Organic Milk" for immediate purchase',
-        timestamp: '2024-01-16T09:15:00',
-        read: false,
-        actionRequired: true
+      // Load market notifications (market gaps, buyer requests, etc.)
+      const notificationsResponse = await agriConnectAPI.market.getMarketNotifications();
+      if (notificationsResponse.success) {
+        setNotifications(notificationsResponse.notifications || []);
       }
-    ];
 
-    setProducts(userProducts);
-    setNotifications(userNotifications);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load your market data');
+      // Fallback to empty arrays on error
+      setProducts([]);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateStats = () => {
     const totalProducts = products.length;
     const pendingProducts = products.filter(p => p.status === 'pending').length;
-    const approvedProducts = products.filter(p => p.status === 'approved').length;
+    // Handle both approved boolean and status string
+    const approvedProducts = products.filter(p => 
+      p.status === 'approved' || p.approved === true
+    ).length;
     const unreadNotifications = notifications.filter(n => !n.read).length;
 
     setStats({
@@ -156,47 +117,92 @@ const MyMarket = () => {
     });
   };
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!productForm.name || !productForm.price || !productForm.quantity) {
-      alert('Please fill in required fields');
+      toast.error('Please fill in required fields');
       return;
     }
 
-    const newProduct = {
-      id: Date.now(),
-      ...productForm,
-      status: 'pending',
-      adminRequested: false,
-      dateAdded: new Date().toISOString().split('T')[0],
-      views: 0,
-      inquiries: 0
-    };
+    try {
+      // Prepare post data
+      const postData = {
+        title: productForm.name,
+        description: productForm.description,
+        price: parseFloat(productForm.price),
+        quantity: parseFloat(productForm.quantity),
+        category: productForm.category,
+        region: productForm.region,
+        type: 'offer', // This is a product offer
+        status: 'pending'
+      };
 
-    setProducts([newProduct, ...products]);
-    setShowProductForm(false);
-    resetProductForm();
-    
-    alert('Product added successfully! It will be reviewed by admin.');
+      // Create the post with image if provided
+      const images = productForm.image ? [productForm.image] : [];
+      const response = await agriConnectAPI.market.createPost(postData, images);
+
+      if (response.success) {
+        // Refresh the products list
+        loadInitialData();
+        setShowProductForm(false);
+        resetProductForm();
+        toast.success('Product added successfully! It will be reviewed by admin.');
+      } else {
+        toast.error('Failed to add product');
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      toast.error('Failed to add product');
+    }
   };
 
-  const handleEditProduct = () => {
+  const handleEditProduct = async () => {
     if (!editingProduct) return;
 
-    setProducts(products.map(p => 
-      p.id === editingProduct.id ? { ...p, ...productForm, status: 'pending' } : p
-    ));
-    
-    setEditingProduct(null);
-    setShowProductForm(false);
-    resetProductForm();
-    
-    alert('Product updated successfully! Changes will be reviewed by admin.');
+    try {
+      const updateData = {
+        title: productForm.name,
+        description: productForm.description,
+        price: parseFloat(productForm.price),
+        quantity: parseFloat(productForm.quantity),
+        category: productForm.category,
+        region: productForm.region,
+        status: 'pending' // Reset to pending for admin review
+      };
+
+      const response = await agriConnectAPI.market.updatePost(editingProduct.id, updateData);
+
+      if (response.success) {
+        // Refresh the products list
+        loadInitialData();
+        setEditingProduct(null);
+        setShowProductForm(false);
+        resetProductForm();
+        toast.success('Product updated successfully! Changes will be reviewed by admin.');
+      } else {
+        toast.error('Failed to update product');
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Failed to update product');
+    }
   };
 
-  const handleDeleteProduct = (productId) => {
+  const handleDeleteProduct = async (productId) => {
     if (window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-      setProducts(products.filter(p => p.id !== productId));
-      alert('Product deleted successfully!');
+      try {
+        const response = await agriConnectAPI.market.deletePost(productId);
+        
+        if (response.success) {
+          // Refresh the products list
+          loadInitialData();
+          toast.success('Product deleted successfully!');
+        } else {
+          toast.error('Failed to delete product');
+        }
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        toast.error('Failed to delete product');
+      }
     }
   };
 
@@ -329,11 +335,24 @@ const MyMarket = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Market Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage your products and explore market opportunities</p>
-        </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center min-h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="text-gray-600 mt-4">Loading your market data...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content */}
+        {!loading && (
+          <div>
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-gray-900">My Market Dashboard</h1>
+              <p className="text-gray-600 mt-2">Manage your products and explore market opportunities</p>
+            </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -775,6 +794,8 @@ const MyMarket = () => {
           </div>
         </div>
       </div>
+    )}
+    </div>
 
       {/* Add/Edit Product Modal */}
       {showProductForm && (

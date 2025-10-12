@@ -61,6 +61,43 @@ def create_skill():
         'skill': skill.to_dict()
     }), 201
 
+@skill_bp.route('/skills/<int:skill_id>', methods=['PUT'])
+@jwt_required()
+def update_skill(skill_id):
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    skill = Skill.query.get_or_404(skill_id)
+    data = request.get_json()
+    
+    # Update skill fields
+    for key, value in data.items():
+        if hasattr(skill, key):
+            setattr(skill, key, value)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Skill updated successfully',
+        'skill': skill.to_dict()
+    }), 200
+
+@skill_bp.route('/skills/<int:skill_id>', methods=['DELETE'])
+@jwt_required()
+def delete_skill(skill_id):
+    identity = json.loads(get_jwt_identity())
+    if identity['type'] != 'admin':
+        return jsonify({'message': 'Admin access required'}), 403
+    
+    skill = Skill.query.get_or_404(skill_id)
+    skill.is_active = False  # Soft delete
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Skill deleted successfully'
+    }), 200
+
 @skill_bp.route('/videos', methods=['POST'])
 @jwt_required()
 def add_skill_video():

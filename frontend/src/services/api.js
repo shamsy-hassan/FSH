@@ -657,6 +657,22 @@ async handleResponse(response) {
             return await this.handleResponse(response);
         },
 
+        // Get current user's market posts
+        getUserPosts: async (page = 1, perPage = 20) => {
+            const userId = localStorage.getItem('agriConnectUserId');
+            if (!userId) {
+                return { success: false, posts: [], message: 'User not authenticated' };
+            }
+            
+            const url = `${API_BASE_URL}/market/posts?user_id=${userId}&page=${page}&per_page=${perPage}`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getHeaders(),
+            });
+
+            return await this.handleResponse(response);
+        },
+
         // Approve market post
         approvePost: async (postId) => {
             const response = await fetch(`${API_BASE_URL}/market/posts/${postId}/approve`, {
